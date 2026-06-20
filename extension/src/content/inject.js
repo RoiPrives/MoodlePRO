@@ -6,24 +6,20 @@ import { injectCourseItemButtons } from "./course-items.js";
 import { injectCourseToolbar } from "./course-toolbar.js";
 import { injectCourseDownloader } from "./course-downloader.js";
 import { findBguVideoPlayer } from "./detect-player.js";
-import { fallbackForMissedSegments } from "./segment-fallback.js";
+import { backfillCompletedJob, fallbackForMissedSegments } from "./segment-fallback.js";
 import { createSidebar } from "./sidebar.js";
+import { createVideoToolbar } from "./video-toolbar.js";
 
 const DEFAULT_SERVER_BASE_URL = "http://localhost:8000";
 
-function addDownloadButton(doc, sidebar, api, jobId) {
-  const button = doc.createElement("button");
-  button.textContent = "Download";
-  button.style.cssText =
-    "display:inline-block;margin-bottom:8px;padding:3px 10px;font-size:12px;cursor:pointer;";
-  button.addEventListener("click", () => {
+function addDownloadButton(doc, toolbar, api, jobId) {
+  toolbar.addButton("Download", () => {
     chrome.runtime.sendMessage({
       type: MSG.DOWNLOAD_TRANSCRIPT,
       txtUrl: api.txtUrl(jobId),
       srtUrl: api.srtUrl(jobId),
     });
   });
-  sidebar.panel.insertBefore(button, sidebar.panel.firstChild);
 }
 
 function connectJobSocket(api, jobId, onEvent) {
@@ -51,14 +47,14 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
   const api = createApiClient(serverBaseUrl);
   const sidebar = createSidebar(doc, player.videoEl);
   const overlay = createCaptionOverlay(doc, player.videoEl);
+  const toolbar = createVideoToolbar(doc, player.videoEl);
 
   const job = await api.createJob({ videoUrl: player.mp4Url, moodleVideoId: player.moodleVideoId });
-  addDownloadButton(doc, sidebar, api, job.id);
-  attachChapters(doc, api, job.id, player.videoEl).catch(() => {});
+  addDownloadButton(doc, toolbar, api, job.id);
+  attachChapters(doc, api, job.id, player.videoEl, toolbar).catch(() => {});
 
   if (job.status === "completed" && job.text) {
-    sidebar.addSegment({ text: job.text, start: 0, end: Number.MAX_SAFE_INTEGER });
-    overlay.addSegment({ text: job.text, start: 0, end: Number.MAX_SAFE_INTEGER });
+    await backfillCompletedJob(api, job.id, job.text, sidebar, overlay);
     return { player, api, job, socket: null };
   }
 

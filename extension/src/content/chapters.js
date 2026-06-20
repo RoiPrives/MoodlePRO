@@ -18,7 +18,7 @@ async function fetchChaptersWithRetry(httpBase, jobId, attempts = 8, delayMs = 1
   return null;
 }
 
-export async function attachChapters(doc, api, jobId, videoEl) {
+export async function attachChapters(doc, api, jobId, videoEl, toolbar) {
   const httpBase = api.txtUrl(jobId).replace(/\/jobs\/.*$/, "");
 
   const chapters = await fetchChaptersWithRetry(httpBase, jobId);
@@ -26,12 +26,20 @@ export async function attachChapters(doc, api, jobId, videoEl) {
 
   const panel = doc.createElement("div");
   panel.id = "moodlepro-chapters";
-  panel.style.cssText = [
-    "margin-top:12px", "max-height:40vh",
-    "overflow-y:auto", "background:#1a1a1a", "color:#eee",
-    "font-family:sans-serif", "font-size:13px", "padding:10px",
-    "border-radius:8px", "box-shadow:0 1px 4px rgba(0,0,0,.3)",
-  ].join(";");
+  panel.style.cssText = toolbar
+    ? [
+        "position:absolute", "top:100%", "right:0", "margin-top:4px", "width:280px",
+        "max-height:50vh", "overflow-y:auto", "background:#1a1a1a", "color:#eee",
+        "font-family:sans-serif", "font-size:13px", "padding:10px",
+        "border-radius:8px", "box-shadow:0 1px 4px rgba(0,0,0,.3)", "display:none",
+        "z-index:2147483100",
+      ].join(";")
+    : [
+        "margin-top:12px", "max-height:40vh",
+        "overflow-y:auto", "background:#1a1a1a", "color:#eee",
+        "font-family:sans-serif", "font-size:13px", "padding:10px",
+        "border-radius:8px", "box-shadow:0 1px 4px rgba(0,0,0,.3)",
+      ].join(";");
 
   const mountAfter =
     doc.getElementById("moodlepro-sidebar") ??
@@ -97,7 +105,12 @@ export async function attachChapters(doc, api, jobId, videoEl) {
     panel.appendChild(row);
   });
 
-  if (mountAfter && mountAfter.insertAdjacentElement) {
+  if (toolbar) {
+    toolbar.bar.appendChild(panel);
+    toolbar.addButton("Chapters", () => {
+      panel.style.display = panel.style.display === "none" ? "block" : "none";
+    });
+  } else if (mountAfter && mountAfter.insertAdjacentElement) {
     mountAfter.insertAdjacentElement("afterend", panel);
   } else {
     doc.body.appendChild(panel);

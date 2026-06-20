@@ -28,7 +28,7 @@ export function createResultModal(doc) {
     box = doc.createElement("div");
     box.id = "moodlepro-modal";
     box.style.cssText = [
-      "position:relative", "background:#fff", "color:#111", "max-width:600px",
+      "position:relative", "background:#fff !important", "color:#111 !important", "max-width:600px",
       "width:90%", "max-height:80vh", "overflow-y:auto", "border-radius:8px",
       "padding:20px", "font-family:sans-serif", "font-size:14px",
       "box-shadow:0 4px 24px rgba(0,0,0,.4)",
@@ -61,7 +61,7 @@ export function createResultModal(doc) {
     const content = open();
     const p = doc.createElement("p");
     p.textContent = text;
-    p.style.cssText = "white-space:pre-wrap;margin-top:8px;";
+    p.style.cssText = "white-space:pre-wrap;margin-top:8px;color:#111 !important;";
     content.appendChild(p);
   }
 
@@ -72,12 +72,12 @@ export function createResultModal(doc) {
 
       const qText = doc.createElement("div");
       qText.textContent = `${qIndex + 1}. ${q.question}`;
-      qText.style.cssText = "font-weight:bold;margin-bottom:8px;";
+      qText.style.cssText = "font-weight:bold;margin-bottom:8px;color:#111 !important;";
       qBlock.appendChild(qText);
 
       const explanation = doc.createElement("div");
       explanation.textContent = q.explanation ?? "";
-      explanation.style.cssText = "display:none;margin-top:8px;font-style:italic;color:#444;";
+      explanation.style.cssText = "display:none;margin-top:8px;font-style:italic;color:#444 !important;";
 
       let answered = false;
       q.options.forEach((option, optIndex) => {
@@ -86,7 +86,7 @@ export function createResultModal(doc) {
         optionButton.style.cssText = [
           "display:block", "width:100%", "text-align:left", "margin:4px 0",
           "padding:8px", "border:1px solid #ccc", "border-radius:4px",
-          "background:#f7f7f7", "cursor:pointer",
+          "background:#f7f7f7", "color:#111 !important", "cursor:pointer",
         ].join(";");
         optionButton.addEventListener("click", () => {
           if (answered) return;
