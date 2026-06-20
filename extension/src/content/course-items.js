@@ -31,6 +31,10 @@ export function injectCourseItemButtons(doc, serverBaseUrl) {
   const items = scrapeCourseItems(doc);
 
   items.forEach((item) => {
+    // Link/URL items point to external content the extension can't read — skip them
+    // instead of injecting buttons that would summarize/quiz on empty text.
+    if (item.type === "link") return;
+
     const li = findLiForItem(doc, item.id);
     if (!li) return;
 

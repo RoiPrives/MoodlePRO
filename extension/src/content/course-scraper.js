@@ -10,6 +10,9 @@ function classifyType(li) {
 
   if (li.classList.contains("modtype_resource")) return "slides";
 
+  // A URL module just points somewhere external — there's no Moodle-side content to read.
+  if (li.classList.contains("modtype_url")) return "link";
+
   return "other";
 }
 

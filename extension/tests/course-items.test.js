@@ -36,6 +36,25 @@ describe("injectCourseItemButtons", () => {
     expect(texts.some((t) => t.includes("Quiz"))).toBe(true);
   });
 
+  it("does not inject buttons on a link/URL item (external, unreadable)", () => {
+    document.body.innerHTML = `
+      <ul data-for="cmlist">
+        <li class="activity modtype_url" data-for="cmitem" data-id="200">
+          <div class="activity-item">
+            <div class="activity-name-area">
+              <div class="activityname">
+                <a href="https://moodle.bgu.ac.il/moodle/mod/url/view.php?id=200">
+                  <span class="instancename">External link</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </li>
+      </ul>`;
+    injectCourseItemButtons(document, "http://localhost:8000");
+    expect(document.querySelectorAll("[data-moodlepro-ui]")).toHaveLength(0);
+  });
+
   it("does not duplicate buttons when called twice", () => {
     injectCourseItemButtons(document, "http://localhost:8000");
     injectCourseItemButtons(document, "http://localhost:8000");

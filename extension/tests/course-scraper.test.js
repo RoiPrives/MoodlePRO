@@ -117,4 +117,22 @@ describe("scrapeCourseItems", () => {
     expect(lecture.text).not.toContain("📝 Summary + Quiz");
     expect(lecture.text).toContain("הרצאה 1");
   });
+
+  it("classifies a URL module as a 'link' (external, unreadable content)", () => {
+    const doc = makeDoc(`
+      <html><body><ul data-for="cmlist">
+        <li class="activity modtype_url" data-for="cmitem" data-id="900">
+          <div class="activity-name-area">
+            <div class="activityname">
+              <a href="https://moodle.bgu.ac.il/moodle/mod/url/view.php?id=900">
+                <span class="instancename">External resource</span>
+              </a>
+            </div>
+          </div>
+        </li>
+      </ul></body></html>
+    `);
+    const item = scrapeCourseItems(doc).find((i) => i.id === "900");
+    expect(item.type).toBe("link");
+  });
 });
