@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -37,9 +37,11 @@ class Job(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
     video_url: Mapped[str] = mapped_column(Text)
     moodle_video_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    audio_hash: Mapped[str | None] = mapped_column(
-        String(64), ForeignKey("transcripts.audio_hash"), nullable=True
-    )
+    # The audio hash a job will be (or was) transcribed under. This is a dedup *key*,
+    # not an enforced FK: on a cache miss the job records its hash before any transcript
+    # row exists, so a FK to transcripts.audio_hash would (and did) violate on insert.
+    # Indexed because _to_response / dedup look transcripts up by it.
+    audio_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="pending")
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
