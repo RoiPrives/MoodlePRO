@@ -50,23 +50,47 @@ IP. Put that name in `.env` as `DOMAIN` / `PUBLIC_BASE_URL`.
 
 ## 4. Install Docker + open the host firewall
 
-SSH in, then:
+The default OCI user is `ubuntu` on Ubuntu images and `opc` on Oracle Linux images.
+Pick the matching block below. Either way, **both** the VCN security list (step 2) **and**
+the host firewall must allow the port, or you'll get "connection refused" despite correct
+VCN rules.
+
+### Ubuntu
 
 ```bash
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER && newgrp docker
 
-# OCI Ubuntu images block inbound ports at the HOST level too (not just the VCN).
-# Both layers must allow the port, or you'll see "connection refused" with correct rules.
 sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
 sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
 sudo netfilter-persistent save
 ```
 
+### Oracle Linux (8/9)
+
+The `get.docker.com` convenience script rejects Oracle Linux (`ERROR: Unsupported
+distribution 'ol'`). Install Docker CE from Docker's CentOS repo instead, and use
+`firewalld` (active by default on OL) rather than raw iptables:
+
+```bash
+sudo dnf install -y dnf-utils
+sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER && newgrp docker
+
+# firewalld is active on OL images; netfilter-persistent does NOT exist here.
+sudo firewall-cmd --permanent --add-port=80/tcp
+sudo firewall-cmd --permanent --add-port=443/tcp
+sudo firewall-cmd --reload
+```
+
 ## 5. Deploy
 
 ```bash
-git clone <your-repo-url> ~/MoodlePRO && cd ~/MoodlePRO/deploy
+# The deploy stack lives on the `cluster` branch. Repo is private — when prompted for a
+# password, paste a GitHub Personal Access Token (Settings → Developer settings → PAT).
+git clone -b cluster https://github.com/RoiPrives/MoodlePRO.git ~/MoodlePRO && cd ~/MoodlePRO/deploy
 cp .env.example .env
 # Generate secrets and edit .env:
 openssl rand -hex 32        # use for POSTGRES_PASSWORD, REDIS_PASSWORD, INTERNAL_API_TOKEN
@@ -100,10 +124,19 @@ Now that you know the cluster's egress IP:
 
 1. VCN security list → add **Ingress 6379 from `<cluster-egress-IP>/32`**.
 2. On the host, restrict it there too:
+
+   **Ubuntu (iptables):**
    ```bash
    sudo iptables -I INPUT 6 -p tcp -s <cluster-egress-IP> --dport 6379 -j ACCEPT
    sudo iptables -I INPUT 7 -p tcp --dport 6379 -j DROP
    sudo netfilter-persistent save
+   ```
+
+   **Oracle Linux (firewalld):** allow 6379 only from the cluster IP via a rich rule —
+   don't open the port globally:
+   ```bash
+   sudo firewall-cmd --permanent --add-rich-rule="rule family=ipv4 source address=<cluster-egress-IP>/32 port port=6379 protocol=tcp accept"
+   sudo firewall-cmd --reload
    ```
 
 Re-run the probe to confirm Redis is still reachable from the cluster (and ideally that it
