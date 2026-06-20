@@ -8,6 +8,7 @@ from app.db.models import Job
 from app.db.session import get_session
 from app.schemas import JobCreateRequest, JobResponse, JobStatus
 from app.services import audio_extract, dedup, storage, video_fetch
+from app.services.fallback import schedule_groq_fallback
 from app.services.jobs import get_job_or_404
 from app.services.queue import enqueue_job
 
@@ -70,6 +71,7 @@ async def create_job(
     job.status = JobStatus.queued
     await session.commit()
     await enqueue_job(redis, job.id)
+    schedule_groq_fallback(job.id, audio_hash, request.language)
     return await _to_response(session, job)
 
 
