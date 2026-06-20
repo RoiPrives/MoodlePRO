@@ -48,28 +48,55 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
   }
 
   const api = createApiClient(serverBaseUrl);
-  const sidebar = createSidebar(doc, player.videoEl);
-  const overlay = createCaptionOverlay(doc, player.videoEl);
   const toolbar = createVideoToolbar(doc, player.videoEl);
 
-  const job = await api.createJob({ videoUrl: player.mp4Url, moodleVideoId: player.moodleVideoId });
-  addDownloadButton(doc, toolbar, api, job.id);
-  attachChapters(doc, api, job.id, player.videoEl, toolbar).catch(() => {});
+  let loadSubtitlesPromise = null;
 
-  if (job.status === "completed" && job.text) {
-    await backfillCompletedJob(api, job.id, job.text, sidebar, overlay);
-    return { player, api, job, socket: null };
+  async function loadSubtitles() {
+    if (loadSubtitlesPromise) return loadSubtitlesPromise;
+
+    loadSubtitlesPromise = (async () => {
+      loadBtn.textContent = "Loading...";
+      loadBtn.disabled = true;
+      try {
+        const job = await api.createJob({ videoUrl: player.mp4Url, moodleVideoId: player.moodleVideoId });
+        addDownloadButton(doc, toolbar, api, job.id);
+        attachChapters(doc, api, job.id, player.videoEl, toolbar).catch(() => {});
+
+        const sidebar = createSidebar(doc, player.videoEl);
+        const overlay = createCaptionOverlay(doc, player.videoEl);
+
+        if (job.status === "completed" && job.text) {
+          await backfillCompletedJob(api, job.id, job.text, sidebar, overlay);
+          loadBtn.remove();
+          return { job, socket: null, sidebar, overlay };
+        }
+
+        const socket = connectJobSocket(api, job.id, (event) => {
+          if (event.type === "segment") {
+            sidebar.addSegment(event);
+            overlay.addSegment(event);
+          }
+        });
+        fallbackForMissedSegments(api, job.id, sidebar, overlay).catch(() => {});
+
+        loadBtn.remove();
+        return { job, socket, sidebar, overlay };
+      } catch (err) {
+        console.error(err);
+        loadBtn.textContent = "Error loading subtitles";
+        loadBtn.disabled = false;
+        loadSubtitlesPromise = null;
+        throw err;
+      }
+    })();
+
+    return loadSubtitlesPromise;
   }
 
-  const socket = connectJobSocket(api, job.id, (event) => {
-    if (event.type === "segment") {
-      sidebar.addSegment(event);
-      overlay.addSegment(event);
-    }
-  });
-  fallbackForMissedSegments(api, job.id, sidebar, overlay).catch(() => {});
+  const loadBtn = toolbar.addButton("Load Subtitles", loadSubtitles);
 
-  return { player, api, job, socket, sidebar, overlay };
+  return { player, api, loadButton: loadBtn, loadSubtitles };
 }
 
 if (typeof window !== "undefined" && !window.__moodleproTest) {

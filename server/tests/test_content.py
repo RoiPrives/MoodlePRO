@@ -30,6 +30,11 @@ def fake_pipeline(monkeypatch):
     monkeypatch.setattr(video_fetch, "download_video", fake_download)
     monkeypatch.setattr(audio_extract, "extract_audio", fake_extract)
 
+    from app.api import content
+    async def fake_resolve_academic_texts(session, items):
+        return items
+    monkeypatch.setattr(content, "_resolve_academic_texts", fake_resolve_academic_texts)
+
 
 async def test_fake_summarizer_returns_stub_string():
     result = await FakeSummarizer().summarize("one two three four five", mode="formal")
@@ -284,3 +289,22 @@ async def test_chapter_quiz_404_for_bad_chapter_id(client, internal_headers):
 
     response = await client.post(f"/jobs/{job_id}/chapters/9999/quiz")
     assert response.status_code == 404
+
+
+async def test_post_items_solve(client, monkeypatch):
+    from app.api import content
+
+    class FakeSolver:
+        async def solve(self, title, text, **kwargs):
+            return b"fake pdf bytes"
+
+    monkeypatch.setattr(content, "get_solver", lambda: FakeSolver())
+
+    response = await client.post(
+        "/items/solve",
+        json={"title": "Homework 1", "text": "solve this please"},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content == b"fake pdf bytes"
+

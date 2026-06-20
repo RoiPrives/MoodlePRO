@@ -46,7 +46,8 @@ describe("inject main()", () => {
   });
 
   it("wires up sidebar + caption overlay and streams segments from the websocket", async () => {
-    const result = await main(document, "http://localhost:8000");
+    const controller = await main(document, "http://localhost:8000");
+    const result = await controller.loadSubtitles();
 
     expect(result.job.id).toBe("job-1");
     expect(document.getElementById("moodlepro-sidebar")).not.toBeNull();
@@ -68,7 +69,8 @@ describe("inject main()", () => {
       json: async () => ({ id: "job-2", status: "completed", text: "cached transcript" }),
     });
 
-    const result = await main(document, "http://localhost:8000");
+    const controller = await main(document, "http://localhost:8000");
+    const result = await controller.loadSubtitles();
 
     expect(result.socket).toBeNull();
     expect(result.job.status).toBe("completed");
@@ -76,7 +78,8 @@ describe("inject main()", () => {
   });
 
   it("sends a DOWNLOAD_TRANSCRIPT message to the background worker on button click", async () => {
-    await main(document, "http://localhost:8000");
+    const controller = await main(document, "http://localhost:8000");
+    await controller.loadSubtitles();
 
     const button = document.querySelector("#moodlepro-video-toolbar button");
     button.click();

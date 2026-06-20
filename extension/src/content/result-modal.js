@@ -49,12 +49,46 @@ export function createResultModal(doc) {
     return box;
   }
 
-  function showLoading() {
+  function showLoading(message = "Loading...") {
     const content = open();
     const loading = doc.createElement("div");
-    loading.textContent = "Loading...";
-    loading.style.cssText = "padding:24px 0;text-align:center;";
+    loading.style.cssText = "padding:24px 0;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;";
+
+    const spinner = doc.createElement("div");
+    spinner.style.cssText = "width:36px;height:36px;border:4px solid #f3f3f3;border-top:4px solid #ff9800;border-radius:50%;animation:moodlepro-spin 1s linear infinite;";
+
+    if (!doc.getElementById("moodlepro-keyframes")) {
+      const style = doc.createElement("style");
+      style.id = "moodlepro-keyframes";
+      style.textContent = "@keyframes moodlepro-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
+      doc.head.appendChild(style);
+    }
+
+    const text = doc.createElement("div");
+    text.textContent = message;
+    text.style.cssText = "font-size:14px;color:#555;font-weight:500;";
+
+    loading.appendChild(spinner);
+    loading.appendChild(text);
     content.appendChild(loading);
+  }
+
+  function showError(message) {
+    const content = open();
+    const errorBlock = doc.createElement("div");
+    errorBlock.style.cssText = "padding:16px;border-left:4px solid #dc3545;background:#fdf2f2;border-radius:4px;margin-top:8px;text-align:left;";
+
+    const title = doc.createElement("div");
+    title.textContent = "⚠️ Error Occurred";
+    title.style.cssText = "font-weight:bold;color:#dc3545;font-size:14px;margin-bottom:6px;";
+
+    const body = doc.createElement("div");
+    body.textContent = message;
+    body.style.cssText = "color:#555;font-size:13px;line-height:1.4;white-space:pre-wrap;";
+
+    errorBlock.appendChild(title);
+    errorBlock.appendChild(body);
+    content.appendChild(errorBlock);
   }
 
   function showSummary(text) {
@@ -125,5 +159,5 @@ export function createResultModal(doc) {
     renderQuizInto(content, questions);
   }
 
-  return { showSummary, showQuiz, showSummaryAndQuiz, showLoading, close };
+  return { showSummary, showQuiz, showSummaryAndQuiz, showLoading, showError, close };
 }

@@ -23,7 +23,7 @@ function setupDom() {
 function mockFetchForApi(extraHandlers = {}) {
   global.fetch.mockImplementation((url) => {
     for (const [suffix, handler] of Object.entries(extraHandlers)) {
-      if (typeof url === "string" && url.endsWith(suffix)) return handler();
+      if (typeof url === "string" && url.includes(suffix)) return handler();
     }
     return Promise.reject(new Error("unexpected url " + url));
   });
@@ -48,16 +48,19 @@ describe("injectCoursePageToolbar", () => {
     expect(toolbar.textContent).toContain("Course Quiz");
   });
 
-  it("opens the selection popup, filters out the technical forum, and lists only the academic lecture/slides", () => {
+  it("opens the selection popup, filters out the technical forum, and lists only the academic lectures", async () => {
     injectCoursePageToolbar(document, "http://localhost:8000");
     const summaryBtn = Array.from(document.querySelectorAll("button")).find(b => b.textContent.includes("Course Summary"));
     summaryBtn.click();
 
-    const menu = document.querySelector("#moodlepro-selection-menu");
-    expect(menu).not.toBeNull();
+    let menu;
+    await vi.waitFor(() => {
+      menu = document.querySelector("#moodlepro-selection-menu");
+      expect(menu).not.toBeNull();
+    });
 
     const labels = Array.from(menu.querySelectorAll("#moodlepro-lecture-list label span")).map(s => s.textContent.trim());
-    expect(labels).toEqual(["🎥 Lecture 1: Intro", "📄 Slides 1: Cryptography"]);
+    expect(labels).toEqual(["🎥 Lecture 1: Intro"]);
   });
 
   it("posts selected academic items to /courses/summary on Generate Summary click", async () => {
@@ -69,19 +72,21 @@ describe("injectCoursePageToolbar", () => {
     const summaryBtn = Array.from(document.querySelectorAll("button")).find(b => b.textContent.includes("Course Summary"));
     summaryBtn.click();
 
-    const menu = document.querySelector("#moodlepro-selection-menu");
-    expect(menu).not.toBeNull();
+    let menu;
+    await vi.waitFor(() => {
+      menu = document.querySelector("#moodlepro-selection-menu");
+      expect(menu).not.toBeNull();
+    });
 
     menu.querySelector("#moodlepro-generate-btn").click();
 
     await vi.waitFor(() => {
-      const summaryCall = global.fetch.mock.calls.find(([url]) => typeof url === "string" && url.endsWith("/courses/summary"));
+      const summaryCall = global.fetch.mock.calls.find(([url]) => typeof url === "string" && url.includes("/courses/summary"));
       expect(summaryCall).toBeDefined();
       const body = JSON.parse(summaryCall[1].body);
       expect(body.scope).toBe("everything");
-      expect(body.items).toHaveLength(2);
+      expect(body.items).toHaveLength(1);
       expect(body.items[0].title).toBe("Lecture 1: Intro");
-      expect(body.items[1].title).toBe("Slides 1: Cryptography");
     });
 
     await vi.waitFor(() => {
@@ -101,8 +106,11 @@ describe("injectCoursePageToolbar", () => {
     const quizBtn = Array.from(document.querySelectorAll("button")).find(b => b.textContent.includes("Course Quiz"));
     quizBtn.click();
 
-    const menu = document.querySelector("#moodlepro-selection-menu");
-    expect(menu).not.toBeNull();
+    let menu;
+    await vi.waitFor(() => {
+      menu = document.querySelector("#moodlepro-selection-menu");
+      expect(menu).not.toBeNull();
+    });
 
     const lengthSel = menu.querySelector("#moodlepro-length-select");
     const hardSel = menu.querySelector("#moodlepro-hardness-select");
@@ -112,16 +120,78 @@ describe("injectCoursePageToolbar", () => {
     menu.querySelector("#moodlepro-generate-btn").click();
 
     await vi.waitFor(() => {
-      const quizCall = global.fetch.mock.calls.find(([url]) => typeof url === "string" && url.endsWith("/courses/quiz"));
+      const quizCall = global.fetch.mock.calls.find(([url]) => typeof url === "string" && url.includes("/courses/quiz"));
       expect(quizCall).toBeDefined();
       const body = JSON.parse(quizCall[1].body);
       expect(body.num_questions).toBe(10);
       expect(body.difficulty).toBe("easy");
-      expect(body.items).toHaveLength(2);
+      expect(body.items).toHaveLength(1);
     });
 
     await vi.waitFor(() => {
       expect(document.querySelector("#moodlepro-modal").textContent).toContain("Q?");
     });
+  });
+
+  it("correctly checks/unchecks all checkboxes when Select All or Deselect All is clicked", async () => {
+    injectCoursePageToolbar(document, "http://localhost:8000");
+    const summaryBtn = Array.from(document.querySelectorAll("button")).find(b => b.textContent.includes("Course Summary"));
+    summaryBtn.click();
+
+    let menu;
+    await vi.waitFor(() => {
+      menu = document.querySelector("#moodlepro-selection-menu");
+      expect(menu).not.toBeNull();
+    });
+
+    const checkboxes = Array.from(menu.querySelectorAll('#moodlepro-lecture-list input[type="checkbox"]'));
+    expect(checkboxes.every(cb => cb.checked)).toBe(true);
+
+    // Click Deselect All
+    menu.querySelector("#moodlepro-deselect-all").click();
+    expect(checkboxes.every(cb => !cb.checked)).toBe(true);
+
+    // Click Select All
+    menu.querySelector("#moodlepro-select-all").click();
+    expect(checkboxes.every(cb => cb.checked)).toBe(true);
+  });
+
+  it("fetches course media lectures when a Course Media link is present and ignores other page items", async () => {
+    // Add Course Media link to DOM
+    const link = document.createElement("a");
+    link.className = "course-media-link";
+    link.href = "https://moodle.bgu.ac.il/moodle/blocks/video/videoslist.php?courseid=64340";
+    document.body.appendChild(link);
+
+    // Mock fetch for videoslist.php
+    mockFetchForApi({
+      "videoslist.php": () => Promise.resolve({
+        ok: true,
+        text: async () => `
+          <table>
+            <tbody>
+              <tr id="videoslist_table_r1">
+                <td class="cell c0"><a href="viewvideo.php?id=999">x</a></td>
+                <td class="cell c1">Course Media Video Lecture</td>
+                <td class="cell c4">Instructor</td>
+              </tr>
+            </tbody>
+          </table>
+        `
+      })
+    });
+
+    injectCoursePageToolbar(document, "http://localhost:8000");
+    const summaryBtn = Array.from(document.querySelectorAll("button")).find(b => b.textContent.includes("Course Summary"));
+    summaryBtn.click();
+
+    let menu;
+    await vi.waitFor(() => {
+      menu = document.querySelector("#moodlepro-selection-menu");
+      expect(menu).not.toBeNull();
+    });
+
+    const labels = Array.from(menu.querySelectorAll("#moodlepro-lecture-list label span")).map(s => s.textContent.trim());
+    expect(labels).toEqual(["🎥 Course Media Video Lecture"]);
   });
 });

@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.models import Job, Transcript
 from app.db.session import get_session
 from app.schemas import (
     ChapterResponse,
@@ -10,6 +12,7 @@ from app.schemas import (
     QuizQuestion,
     QuizRequest,
     QuizResponse,
+    SolveRequest,
     SummaryRequest,
     SummaryResponse,
 )
@@ -17,10 +20,35 @@ from app.services import dedup
 from app.services.chaptering import get_chapterer
 from app.services.jobs import get_job_or_404
 from app.services.quiz import get_quiz_generator
+from app.services.solver import get_solver
 from app.services.srt import parse_srt
 from app.services.summarizer import get_summarizer
 
 router = APIRouter()
+
+
+async def _resolve_academic_texts(session: AsyncSession, items: list[CourseItem]) -> list[CourseItem]:
+    resolved = []
+    for item in items:
+        if item.item_type == "lecture":
+            stmt = select(Job).where(Job.moodle_video_id == item.id, Job.status == "completed")
+            result = await session.execute(stmt)
+            job = result.scalars().first()
+            if job and job.audio_hash:
+                stmt_t = select(Transcript).where(Transcript.audio_hash == job.audio_hash)
+                res_t = await session.execute(stmt_t)
+                trans = res_t.scalars().first()
+                if trans:
+                    item.text = trans.text
+                    resolved.append(item)
+                    continue
+            raise HTTPException(
+                status_code=400,
+                detail=f"Lecture '{item.title}' is not transcribed yet. Please download its transcript first.",
+            )
+        else:
+            resolved.append(item)
+    return resolved
 
 
 async def _get_job_transcript(session: AsyncSession, job_id: str):
@@ -49,6 +77,26 @@ async def quiz_item(request: QuizRequest) -> QuizResponse:
     return QuizResponse(questions=[QuizQuestion(**q) for q in questions])
 
 
+@router.post("/items/solve")
+async def solve_assignment(
+    request: SolveRequest, session: AsyncSession = Depends(get_session)
+) -> Response:
+    pdf_bytes = await get_solver().solve(
+        request.title,
+        request.text,
+        file_base64=request.file_base64,
+        mime_type=request.mime_type,
+        course_lectures=request.course_lectures,
+        session=session,
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=solutions.pdf"}
+    )
+
+
+
 _SCOPE_TO_ITEM_TYPE = {
     CourseSummaryScope.assignments: "assignment",
     CourseSummaryScope.lectures: "lecture",
@@ -64,23 +112,29 @@ def _filter_items_by_scope(items: list[CourseItem], scope: CourseSummaryScope) -
 
 
 @router.post("/courses/summary", response_model=SummaryResponse)
-async def summarize_course(request: CourseSummaryRequest) -> SummaryResponse:
+async def summarize_course(
+    request: CourseSummaryRequest, session: AsyncSession = Depends(get_session)
+) -> SummaryResponse:
     filtered = _filter_items_by_scope(request.items, request.scope)
     if not filtered:
         return SummaryResponse(summary="No matching items were found for the requested scope.")
 
-    combined = "\n\n".join(f"## {item.title}\n{item.text}" for item in filtered)
+    resolved = await _resolve_academic_texts(session, filtered)
+    combined = "\n\n".join(f"## {item.title}\n{item.text}" for item in resolved)
     summary = await get_summarizer().summarize(combined)
     return SummaryResponse(summary=summary)
 
 
 @router.post("/courses/quiz", response_model=QuizResponse)
-async def quiz_course(request: CourseSummaryRequest) -> QuizResponse:
+async def quiz_course(
+    request: CourseSummaryRequest, session: AsyncSession = Depends(get_session)
+) -> QuizResponse:
     filtered = _filter_items_by_scope(request.items, request.scope)
     if not filtered:
         return QuizResponse(questions=[])
 
-    combined = "\n\n".join(f"## {item.title}\n{item.text}" for item in filtered)
+    resolved = await _resolve_academic_texts(session, filtered)
+    combined = "\n\n".join(f"## {item.title}\n{item.text}" for item in resolved)
     questions = await get_quiz_generator().generate_quiz(
         combined, num_questions=request.num_questions or 3, difficulty=request.difficulty or "medium"
     )

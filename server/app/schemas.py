@@ -58,6 +58,24 @@ class SummaryResponse(BaseModel):
     summary: str
 
 
+class CourseItem(BaseModel):
+    id: str
+    item_type: str
+    title: str
+    text: str
+
+
+class SolveRequest(BaseModel):
+    title: str
+    text: str
+    item_type: str = "assignment"
+    file_base64: Optional[str] = None
+    mime_type: Optional[str] = None
+    course_lectures: Optional[list[CourseItem]] = None
+
+
+
+
 class QuizQuestion(BaseModel):
     question: str
     options: list[str]
@@ -85,11 +103,7 @@ class CourseSummaryScope(str, Enum):
     slides = "slides"
 
 
-class CourseItem(BaseModel):
-    id: str
-    item_type: str
-    title: str
-    text: str
+
 
 
 class CourseSummaryRequest(BaseModel):

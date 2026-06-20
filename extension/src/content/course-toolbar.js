@@ -1,30 +1,35 @@
 import { createResultModal } from "./result-modal.js";
 import { scrapeCourseItems } from "./course-scraper.js";
+import { findCourseMediaLink, fetchAllCourseMediaVideos } from "./course-media.js";
 
-function toApiItems(items) {
+
+export function toApiItems(items) {
   return items.map(({ id, type, title, text }) => ({ id, item_type: type, title, text }));
 }
 
 async function runCourseSummaryWithItems(doc, httpBase, items) {
   const modal = createResultModal(doc);
-  modal.showLoading();
+  modal.showLoading("Generating course summary using AI... This may take a moment.");
   try {
     const res = await fetch(`${httpBase}/courses/summary`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ scope: "everything", items }),
     });
-    if (!res.ok) throw new Error(`request failed: ${res.status}`);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || `request failed: ${res.status}`);
+    }
     const data = await res.json();
     modal.showSummary(data.summary);
   } catch (err) {
-    modal.showSummary(`Failed to load: ${err.message}`);
+    modal.showError(err.message);
   }
 }
 
 async function runCourseQuizWithItems(doc, httpBase, items, numQuestions, difficulty) {
   const modal = createResultModal(doc);
-  modal.showLoading();
+  modal.showLoading("Generating course quiz... Preparing questions and explanations.");
   try {
     const res = await fetch(`${httpBase}/courses/quiz`, {
       method: "POST",
@@ -36,7 +41,10 @@ async function runCourseQuizWithItems(doc, httpBase, items, numQuestions, diffic
         difficulty,
       }),
     });
-    if (!res.ok) throw new Error(`request failed: ${res.status}`);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || `request failed: ${res.status}`);
+    }
     const data = await res.json();
     if (!data.questions || data.questions.length === 0) {
       modal.showSummary("No matching items were found for the requested scope.");
@@ -44,7 +52,7 @@ async function runCourseQuizWithItems(doc, httpBase, items, numQuestions, diffic
     }
     modal.showQuiz(data.questions);
   } catch (err) {
-    modal.showSummary(`Failed to load: ${err.message}`);
+    modal.showError(err.message);
   }
 }
 
@@ -52,7 +60,7 @@ export function isAcademicItem(item) {
   const title = (item.title || "").toLowerCase();
   const type = item.item_type || item.type;
 
-  if (type !== "lecture" && type !== "slides" && type !== "assignment") {
+  if (type !== "lecture") {
     return false;
   }
 
@@ -128,6 +136,38 @@ export function showSelectionMenu(doc, anchorButton, items, isQuiz, onGenerate) 
       checkboxes.push({ checkbox: cb, item: lec });
     });
   }
+
+  if (items.length > 0) {
+    const toggleRow = doc.createElement("div");
+    toggleRow.style.cssText = "display:flex; gap:12px; margin-bottom:4px;";
+
+    const selectAll = doc.createElement("button");
+    selectAll.type = "button";
+    selectAll.id = "moodlepro-select-all";
+    selectAll.textContent = "Select All";
+    selectAll.style.cssText = "background:none; border:none; color:#0056b3; font-size:11px; font-weight:600; cursor:pointer; padding:0; text-decoration:underline;";
+    selectAll.addEventListener("click", () => {
+      checkboxes.forEach(c => {
+        c.checkbox.checked = true;
+      });
+    });
+
+    const deselectAll = doc.createElement("button");
+    deselectAll.type = "button";
+    deselectAll.id = "moodlepro-deselect-all";
+    deselectAll.textContent = "Deselect All";
+    deselectAll.style.cssText = "background:none; border:none; color:#0056b3; font-size:11px; font-weight:600; cursor:pointer; padding:0; text-decoration:underline;";
+    deselectAll.addEventListener("click", () => {
+      checkboxes.forEach(c => {
+        c.checkbox.checked = false;
+      });
+    });
+
+    toggleRow.appendChild(selectAll);
+    toggleRow.appendChild(deselectAll);
+    menu.appendChild(toggleRow);
+  }
+
   menu.appendChild(listContainer);
 
   let lengthSelect = null;
@@ -240,6 +280,17 @@ export function showSelectionMenu(doc, anchorButton, items, isQuiz, onGenerate) 
   doc.addEventListener("click", closeHandler);
 }
 
+async function loadCourseAcademicItems(doc) {
+  const courseMediaHref = findCourseMediaLink(doc);
+  let rawItems = [];
+  if (courseMediaHref) {
+    rawItems = await fetchAllCourseMediaVideos(courseMediaHref);
+  } else {
+    rawItems = scrapeCourseItems(doc);
+  }
+  return toApiItems(rawItems).filter(isAcademicItem);
+}
+
 export function injectCoursePageToolbar(doc, serverBaseUrl) {
   const httpBase = serverBaseUrl.replace(/\/$/, "");
   const target = doc.querySelector(".page-header-headings") || doc.querySelector("#page-header");
@@ -264,21 +315,36 @@ export function injectCoursePageToolbar(doc, serverBaseUrl) {
     "border-radius:4px", "background:#28a745", "color:#fff", "font-weight:600", "cursor:pointer",
   ].join(";");
 
-  summaryButton.addEventListener("click", () => {
-    const rawItems = toApiItems(scrapeCourseItems(doc));
-    const academicItems = rawItems.filter(isAcademicItem);
-    showSelectionMenu(doc, summaryButton, academicItems, false, (selectedItems) => {
-      runCourseSummaryWithItems(doc, httpBase, selectedItems);
-    });
-  });
+  const originalSummaryText = "📚 Course Summary";
+  const originalQuizText = "🧠 Course Quiz";
 
-  quizButton.addEventListener("click", () => {
-    const rawItems = toApiItems(scrapeCourseItems(doc));
-    const academicItems = rawItems.filter(isAcademicItem);
-    showSelectionMenu(doc, quizButton, academicItems, true, (selectedItems, numQuestions, difficulty) => {
-      runCourseQuizWithItems(doc, httpBase, selectedItems, numQuestions, difficulty);
-    });
-  });
+  async function handleButtonClick(isQuiz, button) {
+    summaryButton.disabled = true;
+    quizButton.disabled = true;
+    button.textContent = "⏳ Scraping...";
+
+    try {
+      const academicItems = await loadCourseAcademicItems(doc);
+      showSelectionMenu(doc, button, academicItems, isQuiz, (selectedItems, numQuestions, difficulty) => {
+        if (isQuiz) {
+          runCourseQuizWithItems(doc, httpBase, selectedItems, numQuestions, difficulty);
+        } else {
+          runCourseSummaryWithItems(doc, httpBase, selectedItems);
+        }
+      });
+    } catch (err) {
+      console.error("Failed to load course items:", err);
+      alert("Failed to load course items: " + err.message);
+    } finally {
+      summaryButton.disabled = false;
+      quizButton.disabled = false;
+      summaryButton.textContent = originalSummaryText;
+      quizButton.textContent = originalQuizText;
+    }
+  }
+
+  summaryButton.addEventListener("click", () => handleButtonClick(false, summaryButton));
+  quizButton.addEventListener("click", () => handleButtonClick(true, quizButton));
 
   toolbar.appendChild(summaryButton);
   toolbar.appendChild(quizButton);
