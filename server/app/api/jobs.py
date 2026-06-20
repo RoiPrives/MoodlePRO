@@ -70,7 +70,10 @@ async def create_job(
 
     job.status = JobStatus.queued
     await session.commit()
-    await enqueue_job(redis, job.id)
+    # Only expose the job to the cluster when that path is enabled; otherwise a running
+    # (test) worker must never pick up a real user's job. Groq handles it either way.
+    if settings.cluster_enabled:
+        await enqueue_job(redis, job.id)
     schedule_groq_fallback(job.id, audio_hash, request.language)
     return await _to_response(session, job)
 

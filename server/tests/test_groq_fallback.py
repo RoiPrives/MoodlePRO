@@ -179,6 +179,34 @@ async def test_fallback_marks_job_failed_on_error(client, monkeypatch):
     assert "groq exploded" in status.json()["error"]
 
 
+async def test_worker_will_handle_false_when_cluster_disabled(monkeypatch):
+    """Kill switch: even with a live worker heartbeat, a disabled cluster goes to Groq."""
+    monkeypatch.setattr(settings, "cluster_enabled", False)
+    monkeypatch.setattr(settings, "groq_fallback_grace_seconds", 60.0)
+    redis = _fake_redis()
+    await redis.set(WORKER_HEARTBEAT_KEY, "1", ex=30)  # a worker IS alive
+
+    handled = await fallback._worker_will_handle(redis, "any-hash")
+    assert handled is False  # ignored the live worker, will use Groq
+
+
+async def test_create_job_does_not_enqueue_when_cluster_disabled(client, monkeypatch):
+    """With the cluster off, a job must never be placed on the worker queue."""
+    from app.services.queue import JOB_QUEUE_KEY
+
+    monkeypatch.setattr(settings, "cluster_enabled", False)
+    monkeypatch.setattr(settings, "groq_api_key", "")  # keep fallback a no-op for this check
+    monkeypatch.setattr(audio_extract, "hash_audio", lambda path: "hash-nocluster")
+
+    redis = _fake_redis()  # shares state with the app's client by URL
+    await redis.delete(JOB_QUEUE_KEY)  # fakeredis persists across tests; start clean
+
+    resp = await client.post("/jobs", json={"video_url": "https://example.com/nc.mp4"})
+    assert resp.json()["status"] == "queued"
+
+    assert await redis.llen(JOB_QUEUE_KEY) == 0  # nothing handed to the cluster
+
+
 async def test_schedule_is_noop_without_api_key(client, monkeypatch):
     monkeypatch.setattr(audio_extract, "hash_audio", lambda path: "hash-groq-4")
     monkeypatch.setattr(settings, "groq_api_key", "")

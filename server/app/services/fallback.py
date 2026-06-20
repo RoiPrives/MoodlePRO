@@ -69,6 +69,8 @@ async def _worker_will_handle(redis: Redis, audio_hash: str) -> bool:
     we should transcribe via Groq now — either because no worker is alive (skip the wait
     entirely) or because the grace period elapsed without one finishing.
     """
+    if not settings.cluster_enabled:
+        return False  # cluster path off: go straight to Groq, ignore any live worker
     loop = asyncio.get_event_loop()
     deadline = loop.time() + settings.groq_fallback_grace_seconds
     while True:

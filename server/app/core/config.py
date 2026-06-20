@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     storage_dir: str = "./data"
     public_base_url: str = "http://localhost:8000"
 
+    # Master switch for the cluster GPU worker path. When False, the server never
+    # enqueues to the cluster and never waits for a worker heartbeat — every job goes
+    # straight to Groq, even if a worker is alive. Keep False until the cluster path is
+    # tested, so a running (test) worker can't silently serve real user jobs.
+    cluster_enabled: bool = True
+
     # Groq cloud fallback: used when no cluster GPU worker claims a queued job in time.
     groq_api_key: str = ""
     groq_model: str = "whisper-large-v3"
