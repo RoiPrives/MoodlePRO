@@ -4,7 +4,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.db.models import Job
+from app.db.models import Job, VideoHash
 from app.db.session import get_session
 from app.schemas import JobCreateRequest, JobResponse, JobStatus
 from app.services import audio_extract, dedup, storage, usage, video_fetch
@@ -19,7 +19,7 @@ def get_redis() -> Redis:
     return Redis.from_url(settings.redis_url)
 
 
-async def _to_response(session: AsyncSession, job: Job) -> JobResponse:
+async def _to_response(session: AsyncSession, job: Job, from_cache: bool = False) -> JobResponse:
     text = None
     if job.audio_hash is not None:
         transcript = await dedup.find_transcript(session, job.audio_hash)
@@ -31,7 +31,16 @@ async def _to_response(session: AsyncSession, job: Job) -> JobResponse:
         error=job.error,
         text=text,
         created_at=job.created_at,
+        from_cache=from_cache,
     )
+
+
+async def _remember_video_hash(session: AsyncSession, moodle_video_id: str, audio_hash: str) -> None:
+    mapping = await session.get(VideoHash, moodle_video_id)
+    if mapping is None:
+        session.add(VideoHash(moodle_video_id=moodle_video_id, audio_hash=audio_hash))
+    else:
+        mapping.audio_hash = audio_hash
 
 
 @router.post("/jobs", response_model=JobResponse)
@@ -40,15 +49,22 @@ async def create_job(
     session: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
 ) -> JobResponse:
-    # Enforce the per-user lecture quota up front (before any download) when a Moodle
-    # user is identified. A re-watch of an already-counted lecture is free.
-    if request.user_id:
-        lecture_key = request.moodle_video_id or request.video_url
-        if not await usage.check_and_reserve(session, request.user_id, lecture_key):
-            raise HTTPException(
-                status_code=403,
-                detail="lecture_quota_reached",
+    lecture_key = request.moodle_video_id or request.video_url
+
+    # Fast path: a lecture we've already transcribed -> serve from cache, no download, and
+    # for free (cache hits never cost a credit).
+    if request.moodle_video_id:
+        mapping = await session.get(VideoHash, request.moodle_video_id)
+        if mapping is not None and await dedup.find_transcript(session, mapping.audio_hash):
+            job = Job(
+                video_url=request.video_url,
+                moodle_video_id=request.moodle_video_id,
+                audio_hash=mapping.audio_hash,
+                status=JobStatus.completed,
             )
+            session.add(job)
+            await session.commit()
+            return await _to_response(session, job, from_cache=True)
 
     job = Job(
         video_url=request.video_url,
@@ -72,11 +88,20 @@ async def create_job(
         await session.commit()
         return await _to_response(session, job)
 
+    if request.moodle_video_id:
+        await _remember_video_hash(session, request.moodle_video_id, audio_hash)
+
     cached = await dedup.find_transcript(session, audio_hash)
     if cached is not None:
+        # Cache hit discovered after hashing — also free.
         job.status = JobStatus.completed
         await session.commit()
-        return await _to_response(session, job)
+        return await _to_response(session, job, from_cache=True)
+
+    # A real transcription is needed — only NOW does it count against the user's quota.
+    if request.user_id:
+        if not await usage.check_and_reserve(session, request.user_id, lecture_key):
+            raise HTTPException(status_code=403, detail="lecture_quota_reached")
 
     job.status = JobStatus.queued
     await session.commit()

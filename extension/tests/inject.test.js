@@ -87,6 +87,20 @@ describe("inject main()", () => {
     expect(FakeWebSocket.instances).toHaveLength(0);
   });
 
+  it("shows an 'on the house' message for a cache hit", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "job-9", status: "completed", text: "cached", from_cache: true }),
+    });
+
+    const result = await main(document, "http://localhost:8000");
+    await result.start();
+
+    const status = document.getElementById("moodlepro-status");
+    expect(status.style.display).not.toBe("none");
+    expect(status.textContent).toContain("על חשבון הבית");
+  });
+
   it("shows an error and re-enables the start button when starting fails", async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error("network down"));
     const result = await main(document, "http://localhost:8000");

@@ -1,3 +1,6 @@
+// TODO(before publish): this points at a TEMPORARY hub02 project. Replace with the real
+// MoodlePRO review/hub02 URL once the project is published. Used by the feedback button
+// and the lecture-quota review prompt (quota-prompt.js).
 export const REVIEW_URL =
   "https://hub02.com/hubs/03bd43e5-ca7c-4287-beb1-738104497ca5/tools/f36f0001-1daf-4acf-a1cb-dc94b8fb3fbb?utm_source=copy_link&utm_medium=share&utm_campaign=hub02_share";
 

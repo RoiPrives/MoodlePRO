@@ -87,7 +87,11 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
 
       if (job.status === "completed" && job.text) {
         await backfillCompletedJob(api, job.id, job.text, sidebar, overlay);
-        status.hide();
+        if (job.from_cache) {
+          status.showInfo("🎁 ההרצאה הזו על חשבון הבית — לא ירדו לך קרדיטים!");
+        } else {
+          status.hide();
+        }
         context = { player, api, job, socket: null, sidebar, overlay, status };
         return context;
       }

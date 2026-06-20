@@ -30,14 +30,27 @@ export function createStatusBanner(doc, videoEl) {
   ].join(";");
 
   const label = doc.createElement("span");
+  let autoHideTimer = null;
 
   function render({ background, withSpinner, text }) {
+    if (autoHideTimer) {
+      clearTimeout(autoHideTimer);
+      autoHideTimer = null;
+    }
     banner.textContent = "";
     banner.style.background = background;
     banner.style.display = "flex";
     if (withSpinner) banner.appendChild(spinner);
     label.textContent = text;
     banner.appendChild(label);
+  }
+
+  function hide() {
+    if (autoHideTimer) {
+      clearTimeout(autoHideTimer);
+      autoHideTimer = null;
+    }
+    banner.style.display = "none";
   }
 
   return {
@@ -48,8 +61,13 @@ export function createStatusBanner(doc, videoEl) {
     showError(text) {
       render({ background: "rgba(180,30,30,.92)", withSpinner: false, text });
     },
-    hide() {
-      banner.style.display = "none";
+    showInfo(text, { autoHideMs = 6000 } = {}) {
+      render({ background: "rgba(30,130,60,.92)", withSpinner: false, text });
+      const win = doc.defaultView;
+      if (autoHideMs && win && win.setTimeout) {
+        autoHideTimer = win.setTimeout(hide, autoHideMs);
+      }
     },
+    hide,
   };
 }

@@ -65,3 +65,13 @@ class UserReward(Base):
 
     user_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     reviewed: Mapped[bool] = mapped_column(default=False)
+
+
+class VideoHash(Base):
+    """Maps a Moodle video id to its audio hash, so a previously-seen lecture can be
+    served from the transcript cache without re-downloading — and for free."""
+
+    __tablename__ = "video_hashes"
+
+    moodle_video_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    audio_hash: Mapped[str] = mapped_column(String(64))
