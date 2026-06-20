@@ -5,6 +5,8 @@ import { createCaptionOverlay } from "./caption-overlay.js";
 import { injectCourseItemButtons } from "./course-items.js";
 import { findBguVideoPlayer } from "./detect-player.js";
 import { injectFeedbackButton } from "./feedback.js";
+import { getMoodleUserId } from "./moodle-user.js";
+import { showQuotaPrompt } from "./quota-prompt.js";
 import { backfillCompletedJob, fallbackForMissedSegments } from "./segment-fallback.js";
 import { createSidebar } from "./sidebar.js";
 import { createStatusBanner } from "./status-banner.js";
@@ -54,6 +56,7 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
   }
 
   const api = createApiClient(serverBaseUrl);
+  const userId = getMoodleUserId(doc);
   const toolbar = createVideoToolbar(doc, player.videoEl);
   const status = createStatusBanner(doc, player.videoEl);
 
@@ -71,7 +74,11 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
     try {
       const sidebar = createSidebar(doc, player.videoEl);
       const overlay = createCaptionOverlay(doc, player.videoEl);
-      const job = await api.createJob({ videoUrl: player.mp4Url, moodleVideoId: player.moodleVideoId });
+      const job = await api.createJob({
+        videoUrl: player.mp4Url,
+        moodleVideoId: player.moodleVideoId,
+        userId,
+      });
 
       addDownloadButton(doc, toolbar, api, job.id);
       addSubtitleControls(toolbar, overlay);
@@ -99,11 +106,23 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
       context = { player, api, job, socket, sidebar, overlay, status };
       return context;
     } catch (err) {
-      // #2: surface failures instead of failing silently, and let the user retry.
-      status.showError("שגיאה בהפעלת התמלול. בדקו את החיבור ונסו שוב.");
       started = false;
       startButton.disabled = false;
       startButton.textContent = "הצג כתוביות";
+
+      if (err && err.status === 403) {
+        // Lecture quota reached — offer the honor-system review path, then retry.
+        status.hide();
+        showQuotaPrompt(doc, {
+          onReviewed: async () => {
+            if (userId) await api.claimReview(userId);
+            await start();
+          },
+        });
+      } else {
+        // #2: surface failures instead of failing silently, and let the user retry.
+        status.showError("שגיאה בהפעלת התמלול. בדקו את החיבור ונסו שוב.");
+      }
       throw err;
     }
   }

@@ -1,4 +1,4 @@
-const REVIEW_URL =
+export const REVIEW_URL =
   "https://hub02.com/hubs/03bd43e5-ca7c-4287-beb1-738104497ca5/tools/f36f0001-1daf-4acf-a1cb-dc94b8fb3fbb?utm_source=copy_link&utm_medium=share&utm_campaign=hub02_share";
 
 /** A small always-present button that sends testers to leave a review on hub02. */

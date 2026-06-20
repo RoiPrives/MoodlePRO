@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.db.models import Job
 from app.db.session import get_session
 from app.schemas import JobCreateRequest, JobResponse, JobStatus
-from app.services import audio_extract, dedup, storage, video_fetch
+from app.services import audio_extract, dedup, storage, usage, video_fetch
 from app.services.fallback import schedule_groq_fallback
 from app.services.jobs import get_job_or_404
 from app.services.queue import enqueue_job
@@ -40,6 +40,16 @@ async def create_job(
     session: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
 ) -> JobResponse:
+    # Enforce the per-user lecture quota up front (before any download) when a Moodle
+    # user is identified. A re-watch of an already-counted lecture is free.
+    if request.user_id:
+        lecture_key = request.moodle_video_id or request.video_url
+        if not await usage.check_and_reserve(session, request.user_id, lecture_key):
+            raise HTTPException(
+                status_code=403,
+                detail="lecture_quota_reached",
+            )
+
     job = Job(
         video_url=request.video_url,
         moodle_video_id=request.moodle_video_id,

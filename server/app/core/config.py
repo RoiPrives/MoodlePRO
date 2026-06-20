@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:8000"
     gemini_api_key: str = ""
 
+    # Per-user lecture quota (identified by Moodle user). Writing a review (honor system)
+    # grants review_bonus_lectures more. user_id-less requests are not gated.
+    base_lecture_quota: int = 5
+    review_bonus_lectures: int = 5
+
     # Master switch for the cluster GPU worker path. When False, the server never
     # enqueues to the cluster and never waits for a worker heartbeat — every job goes
     # straight to Groq, even if a worker is alive. Keep False until the cluster path is

@@ -100,6 +100,39 @@ describe("inject main()", () => {
     expect(startButton.disabled).toBe(false);
   });
 
+  it("shows the review prompt on a 403 quota, then claims the bonus and retries", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<a href="https://moodle.bgu.ac.il/moodle/user/profile.php?id=7">profile</a>'
+    );
+    let calls = 0;
+    global.fetch = vi.fn().mockImplementation(() => {
+      calls += 1;
+      if (calls === 1) return Promise.resolve({ ok: false, status: 403 }); // createJob blocked
+      return Promise.resolve({ ok: true, json: async () => ({ id: "job-1", status: "queued" }) });
+    });
+
+    const result = await main(document, "http://localhost:8000");
+    await result.start().catch(() => {});
+
+    const prompt = document.getElementById("moodlepro-quota-backdrop");
+    expect(prompt).not.toBeNull();
+
+    const confirmButton = Array.from(prompt.querySelectorAll("button")).find(
+      (b) => b.textContent === "כבר השארתי ביקורת"
+    );
+    confirmButton.click();
+
+    // bonus claimed (POST /review) then job retried, prompt closes
+    await vi.waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "http://localhost:8000/users/moodle%3A7/review",
+        expect.objectContaining({ method: "POST" })
+      );
+      expect(document.getElementById("moodlepro-quota-backdrop")).toBeNull();
+    });
+  });
+
   it("sends a DOWNLOAD_TRANSCRIPT message to the background worker on button click", async () => {
     const result = await main(document, "http://localhost:8000");
     await result.start();

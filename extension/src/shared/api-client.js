@@ -3,15 +3,35 @@ export function createApiClient(baseUrl) {
   const wsBase = httpBase.replace(/^http/, "ws");
 
   return {
-    async createJob({ videoUrl, moodleVideoId }) {
+    async createJob({ videoUrl, moodleVideoId, userId }) {
       const res = await fetch(`${httpBase}/jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ video_url: videoUrl, moodle_video_id: moodleVideoId ?? null }),
+        body: JSON.stringify({
+          video_url: videoUrl,
+          moodle_video_id: moodleVideoId ?? null,
+          user_id: userId ?? null,
+        }),
       });
       if (!res.ok) {
-        throw new Error(`createJob failed: ${res.status}`);
+        const error = new Error(`createJob failed: ${res.status}`);
+        error.status = res.status; // 403 == lecture quota reached
+        throw error;
       }
+      return res.json();
+    },
+
+    async getUsage(userId) {
+      const res = await fetch(`${httpBase}/users/${encodeURIComponent(userId)}/usage`);
+      if (!res.ok) throw new Error(`getUsage failed: ${res.status}`);
+      return res.json();
+    },
+
+    async claimReview(userId) {
+      const res = await fetch(`${httpBase}/users/${encodeURIComponent(userId)}/review`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error(`claimReview failed: ${res.status}`);
       return res.json();
     },
 

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from redis.asyncio import Redis
 
-from app.api import content, internal, jobs, ws
+from app.api import content, internal, jobs, users, ws
 from app.core.config import settings
 from app.db.session import init_db
 
@@ -36,6 +36,7 @@ app.include_router(jobs.router)
 app.include_router(internal.router)
 app.include_router(ws.router)
 app.include_router(content.router)
+app.include_router(users.router)
 
 
 @app.get("/health")

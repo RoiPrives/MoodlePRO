@@ -45,3 +45,23 @@ class Job(Base):
     status: Mapped[str] = mapped_column(String(32), default="pending")
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class UserLecture(Base):
+    """One row per distinct lecture a user has started — the per-user quota counter.
+    Keyed by Moodle user id + a lecture key (moodle_video_id, else the video URL)."""
+
+    __tablename__ = "user_lectures"
+
+    user_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    lecture_key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class UserReward(Base):
+    """Tracks whether a user has claimed the review bonus (honor system)."""
+
+    __tablename__ = "user_rewards"
+
+    user_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    reviewed: Mapped[bool] = mapped_column(default=False)

@@ -19,6 +19,13 @@ class JobCreateRequest(BaseModel):
     video_url: str
     moodle_video_id: Optional[str] = None
     language: str = "he"
+    user_id: Optional[str] = None  # Moodle user id; when set, the lecture quota applies
+
+
+class UsageResponse(BaseModel):
+    used: int
+    limit: int
+    reviewed: bool
 
 
 class JobResponse(BaseModel):
