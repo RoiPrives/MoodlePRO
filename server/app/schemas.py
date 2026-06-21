@@ -78,6 +78,7 @@ class QuizRequest(BaseModel):
     text: str
     item_type: str = "other"
     num_questions: int = 3
+    difficulty: str = "medium"
     file_base64: Optional[str] = None
     mime_type: Optional[str] = None
 

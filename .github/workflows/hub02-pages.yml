@@ -95,6 +95,7 @@ jobs:
           cp extension/manifest.json /tmp/moodlepro-extension/
           cp -r extension/dist /tmp/moodlepro-extension/
           cp -r extension/icons /tmp/moodlepro-extension/
+          cp -r extension/vendor /tmp/moodlepro-extension/
           DEPLOY_DIR="$GITHUB_WORKSPACE/${{ steps.detect.outputs.dir }}"
           (cd /tmp/moodlepro-extension && zip -r "$DEPLOY_DIR/moodlepro-extension.zip" .)
 

@@ -21,7 +21,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["icons/logo.png"],
+      "resources": ["icons/logo.png", "vendor/katex/*"],
       "matches": ["https://moodle.bgu.ac.il/*"]
     }
   ],

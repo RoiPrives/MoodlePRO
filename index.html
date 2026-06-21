@@ -109,11 +109,31 @@
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 16px;
-    padding: 8px 28px;
+    padding: 24px 28px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
   }
-  .steps ol { margin: 18px 0; padding-inline-start: 22px; }
-  .steps li { margin-bottom: 14px; font-size: 1.02rem; }
-  .steps li:last-child { margin-bottom: 8px; }
+  .step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .step-num {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--orange-light), var(--orange-deep));
+    color: #1a1107;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+  }
+  .step-body strong { display: block; font-size: 1rem; margin-bottom: 4px; }
+  .step-body .caption { color: var(--muted); font-size: 0.88rem; }
   code {
     background: rgba(247,148,30,0.15);
     color: var(--orange-light);
@@ -121,6 +141,44 @@
     border-radius: 6px;
     font-size: 0.92em;
   }
+  .copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(247,148,30,0.15);
+    color: var(--orange-light);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.9em;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .copy-btn:hover { background: rgba(247,148,30,0.28); }
+
+  .troubleshoot {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 24px;
+    margin-top: 18px;
+  }
+  .troubleshoot summary {
+    cursor: pointer;
+    font-weight: 700;
+    color: var(--orange-light);
+    font-size: 1.02rem;
+  }
+  .troubleshoot-item { margin-top: 14px; }
+  .troubleshoot-item b { display: block; margin-bottom: 4px; }
+  .troubleshoot-item p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+
+  .installed-note {
+    display: none;
+    margin: 0 0 0;
+    font-size: 0.9rem;
+  }
+  .installed-note a { color: var(--orange-light); cursor: pointer; }
 
   .reviews {
     display: grid;
@@ -145,7 +203,7 @@
   footer a { color: var(--orange-light); }
 
   @media (max-width: 600px) {
-    .features, .reviews { grid-template-columns: 1fr; }
+    .features, .reviews, .steps { grid-template-columns: 1fr; }
     h1 { font-size: 2rem; }
   }
 </style>
@@ -159,8 +217,15 @@
         כתוביות ותמלול חיים בעברית ובאנגלית להרצאות במודל של אונ' בן-גוריון —
         ישר בדפדפן, בלי להעלות כלום ובלי לחכות.
       </p>
-      <a class="cta" href="moodlepro-extension.zip" download>⬇️ הורידו את MoodlePRO</a>
-      <p class="cta-note">בחינם, בלי הרשמה. נבנה מחדש אוטומטית עם כל עדכון.</p>
+      <div id="moodlepro-cta">
+        <a class="cta" href="moodlepro-extension.zip" download>⬇️ הורידו את MoodlePRO</a>
+        <p class="cta-note">בחינם, בלי הרשמה. נבנה מחדש אוטומטית עם כל עדכון.</p>
+        <p class="cta-note"><a href="#" id="moodlepro-already-installed">✅ כבר התקנתי</a></p>
+      </div>
+      <p class="installed-note" id="moodlepro-installed-note">
+        ✅ מעולה, ה-MoodlePRO כבר מותקן אצלכם.
+        <a id="moodlepro-show-install">להציג את הוראות ההתקנה בכל זאת</a>
+      </p>
     </div>
 
     <section>
@@ -173,17 +238,64 @@
       </ul>
     </section>
 
-    <section>
+    <section id="moodlepro-install-section">
       <h2>איך מתקינים (2 דקות)</h2>
       <div class="steps">
-        <ol>
-          <li>לוחצים על <strong>הורידו את MoodlePRO</strong> למעלה ומחלצים את הקובץ שהורד.</li>
-          <li>פותחים <code>chrome://extensions</code> בכרום (מדביקים בשורת הכתובת).</li>
-          <li>מדליקים את <strong>מצב מפתח (Developer mode)</strong> בפינה הימנית העליונה.</li>
-          <li>לוחצים על <strong>Load unpacked</strong> ובוחרים בתיקייה שחולצה.</li>
-          <li>פותחים הרצאה ב-<code>moodle.bgu.ac.il</code> — MoodlePRO מתחיל לבד.</li>
-        </ol>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>מורידים ומחלצים</strong>
+            <span class="caption">לוחצים על <b>הורידו את MoodlePRO</b> למעלה, ואז מחלצים (Extract / Unzip) את הקובץ שהורד — לא פותחים אותו בלי לחלץ.</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>פותחים את עמוד התוספים בכרום</strong>
+            <span class="caption">
+              <button class="copy-btn" id="moodlepro-copy-url" type="button">📋 העתיקו את הכתובת</button>
+              ואז מדביקים אותה בשורת הכתובת של כרום ולוחצים Enter.
+            </span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>מדליקים מצב מפתח</strong>
+            <span class="caption">מתג <b>Developer mode</b> בפינה הימנית העליונה של העמוד. אם הוא כבר דלוק — אפשר לדלג לשלב הבא.</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <strong>טוענים את התוסף</strong>
+            <span class="caption">לוחצים <b>Load unpacked</b> ובוחרים בתיקייה שחולצה — זו שמכילה בתוכה את <code>manifest.json</code>, <code>dist</code> ו-<code>icons</code>.</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <strong>פותחים הרצאה</strong>
+            <span class="caption">נכנסים לכל הרצאה ב-<code>moodle.bgu.ac.il</code> — MoodlePRO מתחיל לבד, בלי שום הגדרה נוספת.</span>
+          </div>
+        </div>
       </div>
+
+      <details class="troubleshoot">
+        <summary>תקוע? כמה תקלות נפוצות ופתרונן</summary>
+        <div class="troubleshoot-item">
+          <b>כרום כותב שה-manifest לא תקין / "Manifest file is missing or unreadable"</b>
+          <p>כנראה נבחרה התיקייה החיצונית (זו שמכילה את ה-zip) ולא התיקייה שחולצה בפועל. צריך לבחור את התיקייה שבתוכה נמצא הקובץ <code>manifest.json</code> ישירות.</p>
+        </div>
+        <div class="troubleshoot-item">
+          <b>לא מוצאים את מתג Developer mode</b>
+          <p>בפרופילי כרום מנוהלים (למשל מחשבי לימוד מסוימים) המתג עשוי להיות חסום על ידי מדיניות הדפדפן. במקרה כזה צריך מחשב/פרופיל אחר.</p>
+        </div>
+        <div class="troubleshoot-item">
+          <b>שום דבר לא קורה בהרצאה</b>
+          <p>MoodlePRO פועל רק בדפי הרצאות בכתובת <code>moodle.bgu.ac.il</code> — לא בעמוד הבית של מודל ולא במודלים אחרים.</p>
+        </div>
+      </details>
     </section>
 
     <section>
@@ -217,5 +329,53 @@
       נבנה עבור האקתון Hub02.
     </footer>
   </div>
+
+  <script>
+    var copyBtn = document.getElementById("moodlepro-copy-url");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", function () {
+        navigator.clipboard.writeText("chrome://extensions").then(function () {
+          var original = copyBtn.textContent;
+          copyBtn.textContent = "✅ הועתק!";
+          setTimeout(function () { copyBtn.textContent = original; }, 1500);
+        });
+      });
+    }
+
+    var STORAGE_KEY = "moodlepro_already_installed";
+    var ctaBlock = document.getElementById("moodlepro-cta");
+    var installedNote = document.getElementById("moodlepro-installed-note");
+    var installSection = document.getElementById("moodlepro-install-section");
+
+    function showInstalledState() {
+      ctaBlock.style.display = "none";
+      installedNote.style.display = "block";
+      installSection.style.display = "none";
+    }
+
+    if (localStorage.getItem(STORAGE_KEY) === "1") {
+      showInstalledState();
+    }
+
+    var alreadyInstalledLink = document.getElementById("moodlepro-already-installed");
+    if (alreadyInstalledLink) {
+      alreadyInstalledLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        localStorage.setItem(STORAGE_KEY, "1");
+        showInstalledState();
+      });
+    }
+
+    var showInstallLink = document.getElementById("moodlepro-show-install");
+    if (showInstallLink) {
+      showInstallLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        localStorage.removeItem(STORAGE_KEY);
+        ctaBlock.style.display = "block";
+        installedNote.style.display = "none";
+        installSection.style.display = "block";
+      });
+    }
+  </script>
 </body>
 </html>
