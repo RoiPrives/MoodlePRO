@@ -14,7 +14,7 @@
 #SBATCH --time 7-00:00:00                          ### 7 days = the partition max
 #SBATCH --job-name moodlepro-worker                ### shared name enables --dependency=singleton chaining (do not change)
 #SBATCH --output moodlepro-worker-%J.out
-#SBATCH --gpus=rtx_3090:1                          ### 24G; turbo model fits easily. Alternatives: rtx_2080:1 / rtx_4090:1 / rtx_6000:1
+#SBATCH --gpus=rtx_4090:1                          ### 24G Ada (fast fp16); turbo model fits easily. Alternatives: rtx_3090:1 / rtx_2080:1 / rtx_6000:1
 #SBATCH --mail-user=prives@post.bgu.ac.il          ### CHANGE if needed
 #SBATCH --mail-type=BEGIN,END,FAIL
 
