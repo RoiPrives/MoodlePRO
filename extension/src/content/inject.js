@@ -10,6 +10,7 @@ import { showQuotaPrompt } from "./quota-prompt.js";
 import { backfillCompletedJob, fallbackForMissedSegments } from "./segment-fallback.js";
 import { createSidebar } from "./sidebar.js";
 import { createStatusBanner } from "./status-banner.js";
+import { createUsageBadge } from "./usage-badge.js";
 import { createVideoToolbar } from "./video-toolbar.js";
 
 // Injected at build time by build.js (defaults to the production server). Falls back to
@@ -106,6 +107,21 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
   let started = false;
   let context = null;
 
+  // Show the user how many free lectures (credits) they have left. Best-effort: needs a
+  // Moodle user id, and a failure here must never block transcription.
+  let usageBadge = null;
+  async function refreshUsage(usage) {
+    if (!userId) return;
+    try {
+      const data = usage ?? (await api.getUsage(userId));
+      if (!usageBadge) usageBadge = createUsageBadge(doc, toolbar);
+      usageBadge.update(data);
+    } catch {
+      /* usage badge is decorative; ignore */
+    }
+  }
+  refreshUsage();
+
   // #3: subtitles/transcript are NOT generated automatically — the user starts them.
   async function start() {
     if (started) return context;
@@ -122,6 +138,7 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
         moodleVideoId: player.moodleVideoId,
         userId,
       });
+      refreshUsage(); // a credit may have been consumed (no-op for cache hits)
 
       addDownloadButton(doc, toolbar, api, job.id);
       addSubtitleControls(toolbar, overlay);
@@ -170,9 +187,9 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
         status.hide();
         showQuotaPrompt(doc, {
           onReviewed: async () => {
-            if (userId) await api.claimReview(userId);
-            await start();
+            if (userId) await refreshUsage(await api.claimReview(userId));
           },
+          onContinue: () => start().catch(() => {}),
         });
       } else {
         // #2: surface failures instead of failing silently, and let the user retry.

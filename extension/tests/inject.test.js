@@ -142,10 +142,21 @@ describe("inject main()", () => {
       "beforeend",
       '<a href="https://moodle.bgu.ac.il/moodle/user/profile.php?id=7">profile</a>'
     );
-    let calls = 0;
-    global.fetch = vi.fn().mockImplementation(() => {
-      calls += 1;
-      if (calls === 1) return Promise.resolve({ ok: false, status: 403 }); // createJob blocked
+    let createCalls = 0;
+    global.fetch = vi.fn().mockImplementation((url) => {
+      const u = String(url);
+      if (u.includes("/usage")) {
+        return Promise.resolve({ ok: true, json: async () => ({ used: 5, limit: 5, reviewed: false }) });
+      }
+      if (u.includes("/review")) {
+        return Promise.resolve({ ok: true, json: async () => ({ used: 5, limit: 10, reviewed: true }) });
+      }
+      if (u.endsWith("/jobs")) {
+        createCalls += 1;
+        if (createCalls === 1) return Promise.resolve({ ok: false, status: 403 }); // quota blocked
+        return Promise.resolve({ ok: true, json: async () => ({ id: "job-1", status: "queued" }) });
+      }
+      // getJob / srt polling after the retry — keep it benign
       return Promise.resolve({ ok: true, json: async () => ({ id: "job-1", status: "queued" }) });
     });
 
@@ -160,14 +171,20 @@ describe("inject main()", () => {
     );
     confirmButton.click();
 
-    // bonus claimed (POST /review) then job retried, prompt closes
+    // bonus claimed (POST /review), success shown, then prompt auto-closes and job retries
     await vi.waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
         "http://localhost:8000/users/moodle%3A7/review",
         expect.objectContaining({ method: "POST" })
       );
-      expect(document.getElementById("moodlepro-quota-backdrop")).toBeNull();
     });
+    await vi.waitFor(
+      () => {
+        expect(document.getElementById("moodlepro-quota-backdrop")).toBeNull();
+        expect(createCalls).toBeGreaterThanOrEqual(2);
+      },
+      { timeout: 3000 }
+    );
   });
 
   it("sends a DOWNLOAD_TRANSCRIPT message to the background worker on button click", async () => {

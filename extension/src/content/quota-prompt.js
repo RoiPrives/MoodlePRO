@@ -3,7 +3,7 @@ import { REVIEW_URL } from "./feedback.js";
 /** Shown when a user hits their lecture quota. Offers the honor-system review path:
  *  "Leave a review" opens hub02; "I left a review" calls onReviewed() to claim the bonus
  *  and retry. */
-export function showQuotaPrompt(doc, { onReviewed, win = doc.defaultView } = {}) {
+export function showQuotaPrompt(doc, { onReviewed, onContinue, win = doc.defaultView } = {}) {
   const existing = doc.getElementById("moodlepro-quota-backdrop");
   if (existing) existing.remove();
 
@@ -46,14 +46,26 @@ export function showQuotaPrompt(doc, { onReviewed, win = doc.defaultView } = {})
   confirmBtn.style.cssText = "display:block;width:100%;margin:6px 0;padding:9px;border:1px solid #2e7d32;border-radius:5px;background:#fff;color:#2e7d32;font-weight:600;font-size:14px;cursor:pointer;";
   confirmBtn.addEventListener("click", async () => {
     confirmBtn.disabled = true;
+    reviewBtn.disabled = true;
     confirmBtn.textContent = "מעדכן…";
     try {
       if (onReviewed) await onReviewed();
-      close();
     } catch {
       confirmBtn.disabled = false;
       confirmBtn.textContent = "כבר השארתי ביקורת";
+      return;
     }
+    // Clear success feedback, then close and continue with the (now-unblocked) transcription.
+    box.textContent = "";
+    const ok = doc.createElement("div");
+    ok.textContent = "🎁 קיבלת 5 הרצאות נוספות! מתחילים…";
+    ok.style.cssText = "font-weight:bold;font-size:15px;color:#2e7d32;direction:rtl;";
+    box.appendChild(ok);
+    const scheduler = win && win.setTimeout ? win.setTimeout.bind(win) : setTimeout;
+    scheduler(() => {
+      close();
+      if (onContinue) onContinue();
+    }, 1600);
   });
   box.appendChild(confirmBtn);
 
