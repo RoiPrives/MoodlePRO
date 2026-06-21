@@ -89,7 +89,22 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
     installFetchProxy(serverBaseUrl);
   }
   replaceBguLogo(doc);
-  injectFeedbackButton(doc);
+
+  const api = createApiClient(serverBaseUrl);
+  const userId = getMoodleUserId(doc);
+
+  // Best-effort refresh of the usage badge; reassigned below once a video toolbar
+  // exists. A no-op on pages without a player (e.g. the course item list).
+  let refreshUsage = async () => {};
+
+  async function claimReviewBonus({ username, referredBy } = {}) {
+    if (!userId) return null;
+    const usageData = await api.claimReview(userId, { username, referredBy });
+    await refreshUsage(usageData);
+    return usageData;
+  }
+
+  injectFeedbackButton(doc, { onClaim: claimReviewBonus });
 
   const player = findBguVideoPlayer(doc);
 
@@ -101,8 +116,6 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
     return null;
   }
 
-  const api = createApiClient(serverBaseUrl);
-  const userId = getMoodleUserId(doc);
   const toolbar = createVideoToolbar(doc, player.videoEl);
   const status = createStatusBanner(doc, player.videoEl);
 
@@ -112,7 +125,7 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
   // Show the user how many free lectures (credits) they have left. Best-effort: needs a
   // Moodle user id, and a failure here must never block transcription.
   let usageBadge = null;
-  async function refreshUsage(usage) {
+  refreshUsage = async (usage) => {
     if (!userId) return;
     try {
       const data = usage ?? (await api.getUsage(userId));
@@ -121,7 +134,7 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
     } catch {
       /* usage badge is decorative; ignore */
     }
-  }
+  };
   refreshUsage();
 
   // #3: subtitles/transcript are NOT generated automatically — the user starts them.
@@ -194,12 +207,7 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
         // Lecture quota reached — offer the honor-system review path, then retry.
         status.hide();
         showQuotaPrompt(doc, {
-          onReviewed: async ({ username, referredBy } = {}) => {
-            if (!userId) return null;
-            const usageData = await api.claimReview(userId, { username, referredBy });
-            await refreshUsage(usageData);
-            return usageData;
-          },
+          onReviewed: claimReviewBonus,
           onContinue: () => start().catch(() => {}),
         });
       } else {
