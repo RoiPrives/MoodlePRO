@@ -4,7 +4,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class WorkerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    redis_url: str = "redis://localhost:6379/0"
+    # The worker talks to the server over HTTPS only (claim jobs, heartbeat, stream
+    # segments, post results) — it never connects to Redis, so the cluster firewall
+    # allowing just 80/443 outbound is enough. No REDIS_URL needed here.
     server_base_url: str = "http://localhost:8000"
     internal_api_token: str = "dev-internal-token-change-me"
 

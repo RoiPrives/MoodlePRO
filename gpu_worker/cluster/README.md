@@ -26,10 +26,12 @@ sbatch --export=ALL,SERVER_URL='https://YOUR-VM',REDIS_HOST='YOUR-VM',REDIS_PORT
 cat moodlepro-probe-*.out
 ```
 
-You want section 3 to print `HTTP OK` and section 4 to show a Redis reply (`+PONG`, or
-even a `-NOAUTH`/`-ERR` line — any reply proves reachability). Section 1 prints the
-cluster's **egress IP**; add it to the VM firewall allowlist for the Redis port. If the
-probe can't reach the VM, fix that (firewall / security group / TLS) before continuing.
+You want section 3 to print `HTTP OK` — that's all that matters. The worker reaches the
+server **only over HTTPS (443)**, because the BGU cluster firewall blocks all outbound
+except 80/443 (we confirmed even 22 and 6379 are blocked leaving the cluster). So the
+probe's **section 4 (raw Redis TCP on 6379) will fail — that's expected and irrelevant**;
+the worker never connects to Redis directly. If section 3 fails, fix that (firewall /
+security group / TLS) before continuing.
 
 ## Step 1 — One-time environment setup (on the manager node)
 
@@ -58,15 +60,15 @@ conda deactivate                              # the guide: submit jobs with the 
 
 ```bash
 cat > ~/.moodlepro.env <<'EOF'
-REDIS_URL=redis://YOUR-VM:6379/0
 SERVER_BASE_URL=https://YOUR-VM
 INTERNAL_API_TOKEN=<the same long secret the server uses>
 EOF
 chmod 600 ~/.moodlepro.env
 ```
 
-`INTERNAL_API_TOKEN` must match the server's. Use TLS endpoints (`rediss://`, `https://`)
-if the VM exposes them.
+`INTERNAL_API_TOKEN` must match the server's. `SERVER_BASE_URL` must be the **HTTPS**
+endpoint — all worker traffic (claim jobs, heartbeat, segments, results) goes over it.
+No `REDIS_URL`: the worker never touches Redis, so nothing needs to be exposed on 6379.
 
 ## Step 3 — Submit the worker
 

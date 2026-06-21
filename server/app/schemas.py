@@ -53,6 +53,14 @@ class JobCompletePayload(BaseModel):
     language: str = "he"
 
 
+class WorkerSegment(BaseModel):
+    """One transcribed segment a GPU worker streams back over HTTPS (the worker can't
+    reach Redis directly from the cluster, so it posts here and the server publishes)."""
+    text: str
+    start: float
+    end: float
+
+
 class SummaryRequest(BaseModel):
     title: str
     text: str

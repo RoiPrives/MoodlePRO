@@ -27,13 +27,14 @@ echo "SLURM_JOB_NODELIST=$SLURM_JOB_NODELIST"
 REPO_DIR="${REPO_DIR:-$HOME/MoodlePRO}"
 CONDA_ENV="${CONDA_ENV:-moodlepro}"
 
-### Secrets (REDIS_URL, SERVER_BASE_URL, INTERNAL_API_TOKEN) live OUTSIDE the repo so
-### they are never committed. Create ~/.moodlepro.env (chmod 600) — see cluster/README.md.
+### Secrets (SERVER_BASE_URL, INTERNAL_API_TOKEN) live OUTSIDE the repo so they are never
+### committed. Create ~/.moodlepro.env (chmod 600) — see cluster/README.md. No REDIS_URL:
+### the worker reaches the server only over HTTPS (the cluster blocks outbound 6379).
 SECRETS_FILE="${SECRETS_FILE:-$HOME/.moodlepro.env}"
 if [ -f "$SECRETS_FILE" ]; then
     set -a; source "$SECRETS_FILE"; set +a
 else
-    echo "ERROR: secrets file $SECRETS_FILE not found (needs REDIS_URL, SERVER_BASE_URL, INTERNAL_API_TOKEN)" >&2
+    echo "ERROR: secrets file $SECRETS_FILE not found (needs SERVER_BASE_URL, INTERNAL_API_TOKEN)" >&2
     exit 1
 fi
 

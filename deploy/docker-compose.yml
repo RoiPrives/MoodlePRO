@@ -30,11 +30,10 @@ services:
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
-    ports:
-      # EXPOSED so the cluster GPU worker can reach it. This is the ONLY internet-facing
-      # data port — lock it to the cluster's egress IP in BOTH the OCI security list and
-      # the host firewall (see README). Password (requirepass) is required regardless.
-      - "6379:6379"
+    # No published ports: Redis is reachable only by the server over the internal Docker
+    # network. The cluster GPU worker no longer connects to Redis directly (the cluster
+    # firewall blocks all outbound except 80/443) — it goes through the server's HTTPS
+    # /internal endpoints instead. So 6379 stays off the internet entirely.
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s

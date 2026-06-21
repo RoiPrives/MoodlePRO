@@ -18,6 +18,12 @@ async def worker_is_alive(redis: Redis) -> bool:
     return bool(await redis.exists(WORKER_HEARTBEAT_KEY))
 
 
+async def set_worker_heartbeat(redis: Redis, ttl_seconds: int) -> None:
+    """Refresh the worker liveness key on a TTL. Called by the worker over HTTPS
+    (it can't SET this in Redis directly from behind the cluster firewall)."""
+    await redis.set(WORKER_HEARTBEAT_KEY, "1", ex=ttl_seconds)
+
+
 async def enqueue_job(redis: Redis, job_id: str) -> None:
     await redis.rpush(JOB_QUEUE_KEY, job_id)
 

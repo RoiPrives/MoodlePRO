@@ -6,16 +6,47 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.security import require_internal_token
 from app.db.session import get_session
-from app.schemas import JobCompletePayload
+from app.schemas import JobCompletePayload, WorkerSegment
 from app.services import dedup, storage
 from app.services.jobs import get_job_or_404
-from app.services.queue import publish_completed
+from app.services.queue import (
+    dequeue_job,
+    publish_completed,
+    publish_segment,
+    set_worker_heartbeat,
+)
 
 router = APIRouter(prefix="/internal", dependencies=[Depends(require_internal_token)])
 
 
 def get_redis() -> Redis:
     return Redis.from_url(settings.redis_url)
+
+
+@router.post("/jobs/claim")
+async def claim_job(timeout: int = 5, redis: Redis = Depends(get_redis)) -> dict:
+    """A GPU worker long-polls this (over HTTPS) to pop the next queued job, instead of
+    doing BLPOP on Redis directly — the cluster firewall only lets 80/443 out."""
+    job_id = await dequeue_job(redis, timeout=timeout)
+    return {"job_id": job_id}
+
+
+@router.post("/worker/heartbeat")
+async def worker_heartbeat(ttl: int = 30, redis: Redis = Depends(get_redis)) -> dict:
+    await set_worker_heartbeat(redis, ttl)
+    return {"status": "ok"}
+
+
+@router.post("/jobs/{job_id}/segments")
+async def publish_job_segment(
+    job_id: str,
+    payload: WorkerSegment,
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """The worker streams each transcribed segment here; the server publishes it to the
+    job's Redis channel so the browser's WebSocket receives it live."""
+    await publish_segment(redis, job_id, payload.text, payload.start, payload.end)
+    return {"status": "ok"}
 
 
 @router.get("/audio/{job_id}")

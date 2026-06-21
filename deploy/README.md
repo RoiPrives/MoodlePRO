@@ -7,15 +7,18 @@ laptop is only needed to submit/update the cluster job. The stack runs as four c
 
 ```
             Internet
-   ┌───────────┬──────────────┐
-   │ :443 (TLS)│ :6379 (Redis) │
-   ▼           │              ▼
- Caddy ──► server ──► postgres │
-              └────► redis ◄───┘   ◄── cluster GPU worker (outbound only)
+   ┌───────────────┐
+   │  :443 (TLS)   │
+   ▼               │
+ Caddy ──► server ──► postgres
+              └────► redis            ◄── cluster GPU worker (HTTPS only, outbound)
 ```
 
-Caddy terminates HTTPS (auto Let's Encrypt) for the extension + the worker's HTTP calls;
-Redis is the one other internet-facing port, locked to the cluster's egress IP.
+Caddy terminates HTTPS (auto Let's Encrypt). **443 is the only internet-facing port** for
+data — the extension *and* the cluster worker both go through it. Redis and Postgres stay
+on the internal Docker network; the worker reaches Redis indirectly via the server's
+`/internal` HTTPS endpoints (the BGU cluster blocks all outbound except 80/443, so a direct
+Redis connection on 6379 is impossible anyway).
 
 ---
 
@@ -38,9 +41,10 @@ Networking → your VCN → Security List → **Ingress rules**, add:
 | --- | --- | --- |
 | 80  | `0.0.0.0/0` | Let's Encrypt HTTP challenge |
 | 443 | `0.0.0.0/0` | HTTPS (extension + worker API) |
-| 6379 | *(add in step 7)* | Redis — locked to the cluster egress IP only |
 
-Leave 6379 closed for now; you'll open it to a single IP once the cluster probe reveals it.
+That's it — **do not open 6379.** The worker talks to the server over HTTPS only, so Redis
+never needs to be internet-facing. (If you opened 6379 during an earlier setup, remove that
+ingress rule and the matching host-firewall rule — see step 7.)
 
 ## 3. DNS
 
@@ -112,53 +116,47 @@ whole worker path:
 
 ```bash
 # on slurm.bgu.ac.il, in gpu_worker/cluster/
-sbatch --export=ALL,SERVER_URL='https://YOUR-DOMAIN',REDIS_HOST='YOUR-DOMAIN',REDIS_PORT='6379' probe.sbatch
+sbatch --export=ALL,SERVER_URL='https://YOUR-DOMAIN' probe.sbatch
 cat moodlepro-probe-*.out
 ```
 
-Note the **egress IP** the probe prints in section 1.
+You only need **section 3 to print `HTTP OK`** — that proves the cluster can reach the
+server over 443, which is the only path the worker uses. (The probe's section 4 Redis check
+will fail; ignore it — 6379 is intentionally not exposed.)
 
-## 7. Lock down Redis to the cluster
+## 7. (No Redis to lock down)
 
-Now that you know the cluster's egress IP:
+Earlier versions exposed Redis on 6379 to the cluster's egress IP. That's no longer needed
+or possible — the BGU cluster blocks all outbound except 80/443, and the worker now reaches
+Redis indirectly through the server's HTTPS `/internal` endpoints. **If you previously opened
+6379, close it again** to keep Redis off the internet:
 
-1. VCN security list → add **Ingress 6379 from `<cluster-egress-IP>/32`**.
-2. On the host, restrict it there too:
-
-   **Ubuntu (iptables):**
-   ```bash
-   sudo iptables -I INPUT 6 -p tcp -s <cluster-egress-IP> --dport 6379 -j ACCEPT
-   sudo iptables -I INPUT 7 -p tcp --dport 6379 -j DROP
-   sudo netfilter-persistent save
-   ```
-
-   **Oracle Linux (firewalld):** allow 6379 only from the cluster IP via a rich rule —
-   don't open the port globally:
-   ```bash
-   sudo firewall-cmd --permanent --add-rich-rule="rule family=ipv4 source address=<cluster-egress-IP>/32 port port=6379 protocol=tcp accept"
-   sudo firewall-cmd --reload
-   ```
-
-Re-run the probe to confirm Redis is still reachable from the cluster (and ideally that it
-is *not* from anywhere else).
+```bash
+# Oracle Linux (firewalld): remove the rich rule you added
+sudo firewall-cmd --permanent --remove-rich-rule="rule family=ipv4 source address=<cluster-egress-IP>/32 port port=6379 protocol=tcp accept"
+sudo firewall-cmd --reload
+```
+…and delete the **Ingress 6379** rule from the VCN security list. (Re-deploying with the
+updated `docker-compose.yml` also stops publishing 6379 on the host in the first place.)
 
 ---
 
 ## Security notes
 
-- **Redis traffic is plaintext** over the internet; we rely on a strong `requirepass` **plus**
-  the single-IP allowlist. Acceptable for this project; the hardening step is to tunnel Redis
-  over WireGuard/stunnel (TLS) instead of exposing 6379. Revisit before any public launch.
+- **Redis is no longer internet-facing** — it lives on the internal Docker network and the
+  worker talks to it only via the server's token-authed HTTPS `/internal` endpoints. This
+  is the hardening this doc used to defer; the cluster's 80/443-only egress forced (and got)
+  the better design.
 - `INTERNAL_API_TOKEN` here **must equal** the cluster worker's `~/.moodlepro.env` value.
 - `.env` is gitignored — keep it that way. Rotate the Groq key that was shared in chat.
-- Postgres has **no published port** — it's only reachable from the server container.
+- Postgres and Redis both have **no published port** — only the server container reaches them.
 
 ## Connecting the worker
 
-On the cluster, `~/.moodlepro.env` (see `gpu_worker/cluster/README.md`) points back here:
+On the cluster, `~/.moodlepro.env` (see `gpu_worker/cluster/README.md`) points back here —
+just the HTTPS endpoint and the shared token, no Redis:
 
 ```
-REDIS_URL=redis://:<REDIS_PASSWORD>@YOUR-DOMAIN:6379/0
 SERVER_BASE_URL=https://YOUR-DOMAIN
 INTERNAL_API_TOKEN=<same as deploy/.env>
 ```

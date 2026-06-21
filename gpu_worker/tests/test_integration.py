@@ -48,7 +48,7 @@ async def test_worker_processes_a_real_job_end_to_end(fake_redis):
 
             worker_settings = WorkerSettings(internal_api_token="test-internal-token")
             processed = await run_once(
-                fake_redis, server_client, FakeTranscriber(), worker_settings, poll_timeout=1
+                server_client, FakeTranscriber(), worker_settings, poll_timeout=1
             )
             assert processed is True
 
