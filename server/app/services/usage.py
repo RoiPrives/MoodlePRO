@@ -20,7 +20,9 @@ async def _limit_for(session: AsyncSession, user_id: str) -> int:
     return settings.base_lecture_quota + bonus + referral_credits
 
 
-def _is_unlimited(reward: UserReward | None) -> bool:
+def _is_unlimited(reward: UserReward | None, user_id: str) -> bool:
+    if user_id in settings.unlimited_user_ids:
+        return True
     if not reward or not reward.username:
         return False
     return reward.username.lower() in {u.lower() for u in settings.unlimited_usernames}
@@ -38,7 +40,7 @@ async def check_and_reserve(session: AsyncSession, user_id: str, lecture_key: st
         return True  # already counted — re-watch is free
 
     reward = await session.get(UserReward, user_id)
-    unlimited = _is_unlimited(reward)
+    unlimited = _is_unlimited(reward, user_id)
     if not unlimited and await _count_lectures(session, user_id) >= await _limit_for(session, user_id):
         return False
 
@@ -76,20 +78,6 @@ async def grant_review_bonus(
     await session.commit()
 
 
-async def set_username(session: AsyncSession, user_id: str, username: str) -> None:
-    """Register a self-reported Moodle username, independent of leaving a review.
-
-    Used to bootstrap the unlimited-quota allowlist before a user has ever hit the
-    quota/review prompt. Must NOT mark the account as reviewed or grant a review bonus.
-    """
-    reward = await session.get(UserReward, user_id)
-    if reward is None:
-        reward = UserReward(user_id=user_id, referral_credits=0)
-        session.add(reward)
-    reward.username = username
-    await session.commit()
-
-
 async def get_usage(session: AsyncSession, user_id: str) -> dict:
     reward = await session.get(UserReward, user_id)
     return {
@@ -97,5 +85,5 @@ async def get_usage(session: AsyncSession, user_id: str) -> dict:
         "limit": await _limit_for(session, user_id),
         "reviewed": bool(reward and reward.reviewed),
         "referral_credits": reward.referral_credits if reward else 0,
-        "unlimited": _is_unlimited(reward),
+        "unlimited": _is_unlimited(reward, user_id),
     }

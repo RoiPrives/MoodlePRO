@@ -37,16 +37,6 @@ export function createApiClient(baseUrl) {
       return res.json();
     },
 
-    async setUsername(userId, username) {
-      const res = await fetch(`${httpBase}/users/${encodeURIComponent(userId)}/username`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username }),
-      });
-      if (!res.ok) throw new Error(`setUsername failed: ${res.status}`);
-      return res.json();
-    },
-
     async getJob(jobId) {
       const res = await fetch(`${httpBase}/jobs/${jobId}`);
       if (!res.ok) {

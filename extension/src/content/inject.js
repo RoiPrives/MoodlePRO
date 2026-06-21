@@ -12,7 +12,6 @@ import { backfillCompletedJob, fallbackForMissedSegments } from "./segment-fallb
 import { createSidebar } from "./sidebar.js";
 import { createStatusBanner } from "./status-banner.js";
 import { createUsageBadge } from "./usage-badge.js";
-import { maybeShowUsernameSetup } from "./username-setup.js";
 import { createVideoToolbar } from "./video-toolbar.js";
 
 // Injected at build time by build.js (defaults to the production server). Falls back to
@@ -106,12 +105,6 @@ export async function main(doc = document, serverBaseUrl = DEFAULT_SERVER_BASE_U
   const userId = getMoodleUserId(doc);
   const toolbar = createVideoToolbar(doc, player.videoEl);
   const status = createStatusBanner(doc, player.videoEl);
-
-  if (userId) {
-    maybeShowUsernameSetup(doc, {
-      onSubmit: (username) => api.setUsername(userId, username),
-    });
-  }
 
   let started = false;
   let context = null;

@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     # as the rest of the quota system) that never get quota-gated at all.
     unlimited_usernames: set[str] = {"leonovt", "prives"}
 
+    # Numeric Moodle user ids (the stable "moodle:<id>" key the extension already sends
+    # with every request) that never get quota-gated, with no prompt/self-report needed
+    # at all. leonovt = 439866, prives = 428572.
+    unlimited_user_ids: set[str] = {"moodle:439866", "moodle:428572"}
+
     # Master switch for the cluster GPU worker path. When False, the server never
     # enqueues to the cluster and never waits for a worker heartbeat — every job goes
     # straight to Groq, even if a worker is alive. Keep False until the cluster path is

@@ -35,10 +35,6 @@ class ReviewClaimRequest(BaseModel):
     referred_by: Optional[str] = None  # username of whoever invited this user, if any
 
 
-class UsernameRequest(BaseModel):
-    username: str
-
-
 class JobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -173,7 +173,7 @@ async def test_allowlisted_username_unlocks_unlimited_quota(client, monkeypatch)
     counter = {"n": 0}
     monkeypatch.setattr(audio_extract, "hash_audio", lambda _p: (counter.__setitem__("n", counter["n"] + 1), f"h{counter['n']}")[1])
 
-    register = await client.post("/users/user-unlim/username", json={"username": "leonovt"})
+    register = await client.post("/users/user-unlim/review", json={"username": "leonovt"})
     assert register.status_code == 200
     assert register.json()["unlimited"] is True
 
@@ -184,19 +184,27 @@ async def test_allowlisted_username_unlocks_unlimited_quota(client, monkeypatch)
 
 async def test_unregistered_username_changes_nothing(client, monkeypatch):
     monkeypatch.setattr(settings, "base_lecture_quota", 1)
+    monkeypatch.setattr(settings, "review_bonus_lectures", 0)
     monkeypatch.setattr(settings, "unlimited_usernames", {"leonovt"})
     monkeypatch.setattr(audio_extract, "hash_audio", lambda _p: "h-not-allowlisted")
 
-    register = await client.post("/users/user-plain/username", json={"username": "someone-else"})
+    register = await client.post("/users/user-plain/review", json={"username": "someone-else"})
     assert register.json()["unlimited"] is False
 
     assert (await _post_job(client, "user-plain", "lec-0")).status_code == 200
     assert (await _post_job(client, "user-plain", "lec-1")).status_code == 403
 
 
-async def test_registering_username_does_not_grant_review_bonus(client, monkeypatch):
-    resp = await client.post("/users/user-named/username", json={"username": "someone"})
-    body = resp.json()
-    assert body["reviewed"] is False
-    assert body["referral_credits"] == 0
-    assert body["limit"] == settings.base_lecture_quota
+async def test_allowlisted_user_id_unlocks_unlimited_quota_with_no_prompt(client, monkeypatch):
+    monkeypatch.setattr(settings, "base_lecture_quota", 1)
+    monkeypatch.setattr(settings, "unlimited_user_ids", {"moodle:439866"})
+    counter = {"n": 0}
+    monkeypatch.setattr(audio_extract, "hash_audio", lambda _p: (counter.__setitem__("n", counter["n"] + 1), f"h{counter['n']}")[1])
+
+    # No /username registration at all — matched purely on the numeric id.
+    usage = (await client.get("/users/moodle:439866/usage")).json()
+    assert usage["unlimited"] is True
+
+    for i in range(5):
+        resp = await _post_job(client, "moodle:439866", f"lec-{i}")
+        assert resp.status_code == 200  # never quota-gated, well past base_lecture_quota=1

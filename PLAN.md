@@ -38,16 +38,23 @@ everything below is currently **uncommitted**.
 4. **Feedback button copy** — `extension/src/content/feedback.js` button text is now the
    exact verbatim copy requested: `קבלו עוד הרצאות ע"י השארת ביקורת ⭐`.
 
-5. **Unlimited-quota allowlist** — self-reported usernames `leonovt`/`prives`
-   (case-insensitive, honor system) are never quota-gated, from the first lecture:
-   - Server: `usage.set_username()`, `_is_unlimited()`, `check_and_reserve()` skips the quota
-     check when unlimited, `get_usage()` returns `unlimited: bool`.
-   - `schemas.UsageResponse.unlimited`, new `POST /users/{user_id}/username` endpoint.
-   - Extension: `api-client.setUsername()`, new `username-setup.js` (one-time dismissible
-     prompt, gated on a `moodlepro_username` localStorage key, wired into `inject.js`'s
-     `main()`), `usage-badge.js` renders `🎓 ∞` when unlimited.
-   - Tests: `test_usage.py` (+3 tests, 61/61 server-wide), `username-setup.test.js` +
-     `api-client.test.js` (90/90 extension-wide).
+5. **Unlimited-quota allowlist** — two mechanisms, both feeding the same
+   `_is_unlimited()` check in `server/app/services/usage.py`:
+   - **Id-based (current, no prompt at all)**: `settings.unlimited_user_ids` in
+     `server/app/core/config.py` hardcodes the stable `moodle:<id>` key the extension
+     already sends with every request — `moodle:439866` (leonovt), `moodle:428572`
+     (prives). Matched directly in `check_and_reserve()`/`get_usage()`, zero user
+     interaction needed.
+   - **Username-based (honor system, for anyone else added later)**:
+     `settings.unlimited_usernames` (`{"leonovt", "prives"}`, case-insensitive) matched
+     against `UserReward.username`, which gets set as a side effect of `POST
+     /users/{user_id}/review`'s optional `username` field (the existing referral flow —
+     there's no separate username-registration endpoint; that one-time
+     `username-setup.js` prompt was built and then removed since the id-based path made
+     it redundant for the two known people).
+   - `schemas.UsageResponse.unlimited`; extension `usage-badge.js` renders `🎓 ∞` when
+     unlimited.
+   - Tests: `test_usage.py` (62/62 server-wide), extension 86/86.
 
 6. **Real review URL** — the hub02 review link (`.../tools/6413fd4c-...`) replaced the
    temporary placeholder in `feedback.js` (also used by `quota-prompt.js`); `feedback.test.js`
@@ -56,19 +63,19 @@ everything below is currently **uncommitted**.
 7. **Landing page review button** — `index.html` hero now has a secondary "⭐ השאירו ביקורת"
    button (`.cta-secondary` style) next to the install CTA, linking to the same hub02 URL.
 
+8. **Assignment-solving (`פתרון`) grounded with web search** —
+   `server/app/services/summarizer.py`'s `GeminiSummarizer` now attaches Gemini's built-in
+   `google_search` tool when `mode == "solve"`, so it can pull live web context (formulas,
+   definitions, worked examples) instead of relying only on the provided material. Still
+   uses `STRONG_MODEL` (`gemini-3.1-pro`) for solve mode. Test:
+   `test_gemini_summarizer_grounds_solve_mode_with_google_search` in `test_content.py`.
+
 ## 🚧 Not started — landing page review/referral section
 
 User asked to make the review CTA "clearer/bigger" on the landing page; a button now exists
 (see #7) but there's no dedicated section explaining the incentive yet. Still needed:
 - A section near the hero or reviews mentioning both bonuses explicitly (leave a review →
   +5 lectures; name who invited you → +3 for both), mirroring the extension's copy.
-
-## ❓ Needs clarification before starting
-
-- User's message: *"can we improve the solve button better model and look in the internet
-  for more context to use"* — never clarified. Unclear which button ("solve"?) or which model
-  (quiz/summary LLM?) this refers to. Ask the user directly what this means before touching
-  anything.
 
 ## 📋 Backlog ideas (discussed, not committed to — revisit only if asked)
 
