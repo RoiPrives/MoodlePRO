@@ -38,6 +38,7 @@ class JobResponse(BaseModel):
     text: Optional[str] = None
     created_at: datetime
     from_cache: bool = False  # served from the shared cache → didn't cost a credit
+    provider: Optional[str] = None  # who transcribed: cluster | groq | ivrit | cache
 
 
 class SegmentEvent(BaseModel):

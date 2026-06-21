@@ -43,6 +43,9 @@ class Job(Base):
     # dedup look transcripts up by it.
     audio_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="pending")
+    # Who produced the transcript: "cluster" (GPU worker), "groq"/"ivrit" (cloud fallback),
+    # or "cache" (served from a prior transcript). Null until a transcript is produced.
+    provider: Mapped[str | None] = mapped_column(String(16), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 

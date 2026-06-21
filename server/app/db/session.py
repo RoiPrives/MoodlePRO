@@ -23,6 +23,13 @@ if engine.dialect.name == "sqlite":
 async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # create_all won't add new columns to a table that already exists, so additive
+        # columns need a nudge on existing deployments. Postgres-only (SQLite tests start
+        # fresh, and its ADD COLUMN has no IF NOT EXISTS).
+        if engine.dialect.name == "postgresql":
+            await conn.exec_driver_sql(
+                "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS provider VARCHAR(16)"
+            )
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:

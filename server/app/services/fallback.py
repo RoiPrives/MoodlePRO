@@ -73,6 +73,7 @@ async def run_groq_fallback(
     job = await session.get(Job, job_id)
     if job is not None:
         job.status = "completed"
+        job.provider = settings.fallback_provider  # "groq" (default) or "ivrit"
     await session.commit()
 
     await publish_completed(redis, job_id, result.text)

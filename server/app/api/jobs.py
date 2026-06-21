@@ -32,6 +32,7 @@ async def _to_response(session: AsyncSession, job: Job, from_cache: bool = False
         text=text,
         created_at=job.created_at,
         from_cache=from_cache,
+        provider=job.provider,
     )
 
 
@@ -61,6 +62,7 @@ async def create_job(
                 moodle_video_id=request.moodle_video_id,
                 audio_hash=mapping.audio_hash,
                 status=JobStatus.completed,
+                provider="cache",
             )
             session.add(job)
             await session.commit()
@@ -95,6 +97,7 @@ async def create_job(
     if cached is not None:
         # Cache hit discovered after hashing — also free.
         job.status = JobStatus.completed
+        job.provider = "cache"
         await session.commit()
         return await _to_response(session, job, from_cache=True)
 
