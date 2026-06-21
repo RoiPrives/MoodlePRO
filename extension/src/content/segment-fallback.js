@@ -29,23 +29,31 @@ export async function backfillCompletedJob(api, jobId, text, sidebar, overlay) {
 }
 
 /**
- * Redis pub/sub doesn't replay missed messages: if the transcription job finishes
- * before the client's WebSocket subscribes (common with the instant fake transcriber),
- * every segment event is published and lost before anyone is listening. This polls the
- * job once it might be done and backfills the transcript so the sidebar/caption overlay
- * aren't left empty.
+ * The live WebSocket can fail to deliver segments — Redis pub/sub doesn't replay missed
+ * messages (instant fake transcriber finishes before the client subscribes), and on real
+ * Moodle the page CSP can block the wss:// connection entirely. So this polls the job over
+ * HTTP (which goes through the background fetch proxy) until it's done, then backfills the
+ * full transcript so the sidebar/caption overlay aren't left empty and the loading banner
+ * can clear. Exits early the moment the WebSocket *does* deliver segments.
+ *
+ * Real transcription takes seconds-to-minutes, so the window is generous (default ~10 min).
  */
-export async function fallbackForMissedSegments(api, jobId, sidebar, overlay, attempts = 5, delayMs = 400) {
+export async function fallbackForMissedSegments(api, jobId, sidebar, overlay, attempts = 300, delayMs = 2000) {
   for (let i = 0; i < attempts; i++) {
-    if (sidebar.segments.length > 0) return;
-    const job = await api.getJob(jobId);
-    if (job.status === "completed" && job.text) {
+    if (sidebar.segments.length > 0) return; // the WebSocket delivered; nothing to do
+    let job;
+    try {
+      job = await api.getJob(jobId);
+    } catch {
+      job = null; // transient fetch error — keep polling
+    }
+    if (job && job.status === "completed" && job.text) {
       if (sidebar.segments.length === 0) {
         await backfillCompletedJob(api, jobId, job.text, sidebar, overlay);
       }
       return;
     }
-    if (job.status === "failed") return;
+    if (job && job.status === "failed") return;
     if (i < attempts - 1) await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 }
